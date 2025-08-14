@@ -1,0 +1,66 @@
+
+{
+  "metadata": {
+    "title": "The Lost Caves of Arath",
+    "author": "Example Designer",
+    "version": "1.0",
+    "description": "An ancient cave system full of danger and mystery."
+  },
+  "regions": [
+    {
+      "id": "cave_system",
+      "name": "Cave System",
+      "description": "A labyrinth of tunnels beneath the mountains.",
+      "locations": [
+        {
+          "id": "cave_entrance",
+          "name": "Cave Entrance",
+          "description": "A yawning mouth in the cliffside, cold air seeping out.",
+          "connections": [
+            { "direction": "north", "target": "dark_tunnel" }
+          ],
+          "items": ["torch"],
+          "npcs": ["old_guard"],
+          "events": []
+        },
+        {
+          "id": "dark_tunnel",
+          "name": "Dark Tunnel",
+          "description": "A narrow passage with walls damp to the touch.",
+          "connections": [
+            { "direction": "south", "target": "cave_entrance" },
+            { "direction": "north", "target": "underground_lake" }
+          ],
+          "items": [],
+          "npcs": [],
+          "events": ["bat_swarm"]
+        }
+      ]
+    }
+  ],
+  "items": [
+    {
+      "id": "torch",
+      "name": "Torch",
+      "description": "A wooden torch. Burns for about an hour.",
+      "properties": { "light_source": true }
+    }
+  ],
+  "npcs": [
+    {
+      "id": "old_guard",
+      "name": "Old Guard",
+      "description": "A weary guard in rusty armor.",
+      "dialogue": [
+        { "trigger": "default", "text": "Halt! Who goes there?" }
+      ]
+    }
+  ],
+  "events": [
+    {
+      "id": "bat_swarm",
+      "trigger": { "type": "enter_location", "location": "dark_tunnel" },
+      "effect": { "type": "text", "message": "A swarm of bats rushes past you!" }
+    }
+  ]
+}
