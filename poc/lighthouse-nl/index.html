@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>YORK — Gray Light (NL)</title>
+<style>
+  :root{
+    --bg:#06100c; --ink:#7dffb0; --dim:#3f7a5d; --bad:#ff6b6b; --warn:#ffd166;
+    --good:#9bffce; --fog:#9bb7ff; --panel:#0a1812; --line:#16352a; --key:#c08bff;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace;
+    font-size:14px; line-height:1.45;
+    background-image:repeating-linear-gradient(0deg,rgba(125,255,176,.035) 0 1px,transparent 1px 3px);
+  }
+  #app{max-width:1040px;margin:0 auto;padding:14px 16px 30px;min-height:100%}
+  header{border-bottom:1px solid var(--line);padding-bottom:8px;margin-bottom:12px}
+  h1{font-size:18px;margin:0;letter-spacing:2px;text-shadow:0 0 8px rgba(125,255,176,.4)}
+  .sub{color:var(--dim);font-size:12px;margin-top:2px}
+  .grid{display:grid;grid-template-columns:1.5fr .9fr;gap:14px}
+  @media(max-width:780px){.grid{grid-template-columns:1fr}}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px}
+  .panel h2{font-size:12px;letter-spacing:1px;color:var(--dim);margin:0 0 8px;text-transform:uppercase}
+  pre#scene{white-space:pre-wrap;margin:0;min-height:150px}
+  .meters{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px 14px;margin:10px 0}
+  .meter .lab{display:flex;justify-content:space-between;font-size:11px;color:var(--dim)}
+  .bar{height:9px;background:#0c2018;border:1px solid var(--line);border-radius:5px;overflow:hidden}
+  .bar>i{display:block;height:100%}
+  .f-life>i{background:linear-gradient(90deg,#7dffb0,#3f7a5d)}
+  .f-storm>i{background:linear-gradient(90deg,#9bb7ff,#5a6bff)}
+  .f-beam>i{background:linear-gradient(90deg,#ffd166,#ff9f6b)}
+  .inv{font-size:12px;color:var(--dim);margin-top:6px}
+  .inv b{color:var(--ink)}
+  #log{height:300px;overflow:auto;font-size:13px;padding-right:4px}
+  #log .e{margin:0 0 5px;border-left:2px solid transparent;padding-left:7px}
+  #log .good{border-color:var(--good)}
+  #log .bad{border-color:var(--bad);color:#ffb3b3}
+  #log .warn{border-color:var(--warn);color:#ffe2a3}
+  #log .fog{border-color:var(--fog);color:#c3d2ff}
+  #log .sys{border-color:var(--dim);color:var(--dim)}
+  #log .llm{border-color:var(--key);color:#d9c2ff}
+  #log .you{border-color:#2a4a3a;color:#bfeed4}
+  #input{display:flex;gap:8px;margin-top:12px}
+  #input input{flex:1;background:#0c2018;color:var(--ink);border:1px solid var(--line);
+    border-radius:6px;padding:9px 11px;font:inherit}
+  #input input:focus{outline:none;border-color:var(--ink)}
+  #input button{background:var(--key);color:#1a0f2e;border:none;border-radius:6px;
+    padding:0 16px;font:inherit;font-weight:600;cursor:pointer}
+  #input button:disabled{opacity:.5;cursor:wait}
+  .keys{margin-top:8px;color:var(--dim);font-size:12px}
+  kbd{background:#0c2018;border:1px solid var(--line);border-radius:4px;padding:0 5px}
+  .api{background:#0c1a14;border:1px dashed var(--line);border-radius:6px;padding:10px;margin-bottom:12px;font-size:12.5px;color:#bfeed4}
+  .api input{width:320px;max-width:60%;background:#0c2018;color:var(--ink);border:1px solid var(--line);
+    border-radius:6px;padding:6px 9px;font:inherit;margin-left:6px}
+  .api button{background:var(--ink);color:#06100c;border:none;border-radius:6px;padding:6px 12px;
+    font:inherit;cursor:pointer;margin-left:6px}
+  .api .note{color:var(--dim);margin-top:6px}
+  .sug{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  .sug button{background:#0c2018;color:var(--ink);border:1px solid var(--line);border-radius:14px;
+    padding:4px 10px;font:inherit;font-size:12px;cursor:pointer}
+  .sug button:hover{border-color:var(--ink)}
+  .modal{position:fixed;inset:0;background:rgba(2,8,5,.85);display:flex;align-items:center;justify-content:center;z-index:50}
+  .modal .box{max-width:560px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:20px}
+  .modal h2{color:var(--good)}
+  .modal p{white-space:pre-wrap;line-height:1.6}
+  .modal button{margin-top:14px;background:var(--ink);color:#06100c;border:none;border-radius:6px;padding:8px 16px;font:inherit;cursor:pointer}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>YORK — GRAY LIGHT</h1>
+    <div class="sub">a keeper's island · speak in plain language · the engine owns the truth, the voice narrates it</div>
+  </header>
+
+  <div class="api" id="apiBar">
+    <span>OpenRouter key (stored only in this browser):</span>
+    <input id="apiKey" type="password" placeholder="sk-or-..." />
+    <button id="saveKey">Save</button>
+    <div class="note">
+      Uses the <b>openrouter/free</b> router — no cost. Without a key the game still runs via a built-in
+      offline parser. Eventually this moves to a Vercel function so the key never ships to the client.
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="panel">
+      <h2>Island</h2>
+      <pre id="scene"></pre>
+      <div class="meters" id="meters"></div>
+      <div class="inv" id="inv"></div>
+      <div class="sug" id="sug"></div>
+      <div id="input">
+        <input id="cmd" placeholder="what do you do?  e.g. 'walk to the tower and take the brass key'" />
+        <button id="go">Say</button>
+      </div>
+      <div class="keys">
+        type in plain language · <kbd>Enter</kbd> to act · <kbd>R</kbd> restart ·
+        try <i>look</i>, <i>examine journal</i>, <i>ask Keeper-9 about the last keeper</i>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Keeper's Log</h2>
+      <div id="log"></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="endModal" style="display:none">
+  <div class="box">
+    <h2 id="endTitle"></h2>
+    <p id="endBody"></p>
+    <button id="endAgain">Begin a new watch (R)</button>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+/* ============================================================
+   WORLD SPEC — the rules the LLM must respect.
+   This is the "design" layer: the engine governs truth; the LLM
+   authors prose and proposes interactions, validated against this.
+   ============================================================ */
+const SPEC = {
+  seed: "Gray Light: a volcanic basalt islet in a vast, cold ocean, besieged by a sentient storm called the Fogmind. You are the newest keeper of its lighthouse; the last keeper is missing.",
+  constraints: [
+    "Ecology is self-consistent with a cold volcanic seabird island (auklets, storm-petrels, kelp, lichen, no tropical life).",
+    "Light is both tool and beacon: the beam repels the Fogmind but draws its attention; brighter beam = more Fogmind interest.",
+    "The Fogmind corrupts perception (phantom sights, false sounds, rerouted paths), not merely vision.",
+    "Keepers are a lineage; each left a journal. The lighthouse's history IS the threat.",
+    "Actions cost time. Each meaningful action advances the storm one tick. At storm 12 the peak breaks.",
+    "A locked connection requires its key item to be in inventory before travel is allowed.",
+    "The player cannot fly, swim the open ocean, or leave the island until the boathouse craft is built and launched."
+  ],
+  lore: {} // committed facts; LLM appends here as the world is established
+};
+
+/* ============================================================
+   DETERMINISTIC ENGINE — the spine.
+   Map graph, inventory, life/storm/beam meters, locks, journals,
+   puzzles, win/lose. The LLM never changes this directly.
+   ============================================================ */
+const WORLD = {
+  start: "beach",
+  maxStorm: 12,
+  // nodes: description + connections. "lock" gates travel until key held.
+  nodes: {
+    beach: {
+      name: "Shingle Beach",
+      desc: "Black basalt shingle. A cold sea hisses at your boots. Behind you, a cliff path climbs to the lighthouse; to one side, tide pools glitter.",
+      exits: { north:"cliff_path", west:"tide_pools" }
+    },
+    tide_pools: {
+      name: "Tide Pools",
+      desc: "Sheltered rock pools hold anemones and startled crabs. Among the wrack lies a rusted iron KEY, and a saltwater-damaged journal wrapped in oilcloth.",
+      exits: { east:"beach" },
+      items: ["iron_key"],
+      journal: "j_what"
+    },
+    cliff_path: {
+      name: "Cliff Path",
+      desc: "A worn switchback up the basalt. Halfway, a heavy iron door is set into the rock — the storm-cellar. It is locked.",
+      exits: { south:"beach", north:"tower_base", in:"storm_cellar", east:"watch_post" },
+      lock: { dir:"in", key:"iron_key", lockedText:"The storm-cellar door is locked. An iron key would turn it." }
+    },
+    watch_post: {
+      name: "Watch Post",
+      desc: "A lean-to facing the sea. Inside, a brass TELESCOPE and a keeper's logbook. A path continues east to the chapel.",
+      exits: { west:"cliff_path", east:"chapel" },
+      items: ["telescope"],
+      journal: "j_tele"
+    },
+    chapel: {
+      name: "Chapel of the Beacon",
+      desc: "A low stone chapel. The altar holds a warm PRISM SHARD. A bell-rope hangs by the door. The crypt lies beneath, reached by a trapdoor.",
+      exits: { west:"watch_post", down:"crypt" },
+      items: ["prism_shard"]
+    },
+    crypt: {
+      name: "Crypt",
+      desc: "Cold stone steps down to the keepers' tombs. One niche holds a leather journal and a brass KEY-TOKEN stamped with the lighthouse seal.",
+      exits: { up:"chapel" },
+      items: ["brass_token"],
+      journal: "j_echo"
+    },
+    storm_cellar: {
+      name: "Storm Cellar",
+      desc: "A round vaulted room. A LEVER of black iron stands in the center; pulling it feeds the lighthouse lamp. A journal is bolted to the wall.",
+      exits: { out:"cliff_path" },
+      items: ["lever"],
+      journal: "j_fog"
+    },
+    tower_base: {
+      name: "Lighthouse Base",
+      desc: "The great lamp is dark. A spiral stair winds up to the lamp room. To the south, a boathouse clings to the rocks.",
+      exits: { south:"cliff_path", up:"lamp_room", south_west:"boathouse" }
+    },
+    boathouse: {
+      name: "Boathouse",
+      desc: "A half-ruined boathouse. Timbers and a fouled line lie within — enough to BUILD a small craft if you have the means. The open sea waits beyond.",
+      exits: { north_east:"tower_base" },
+      build: "craft" // requires prism_shard + lever to build; then 'launch' wins
+    },
+    lamp_room: {
+      name: "Lamp Room",
+      desc: "The dead lens looks out over a gray, churning horizon. From here the beam could be raised — if its power is fed from below.",
+      exits: { down:"tower_base" },
+      // raising the beam requires the lever pulled (cellar) — tracked via flags
+    }
+  },
+  // keeper journals — the lore, surfaced by exploration
+  journals: {
+    j_what:   "Keeper-3: \"The fog spoke in my mother's voice today. I answered it. I will not do that again. If you read this — do not answer the fog.\"",
+    j_tele:   "Keeper-7: \"Through the glass I saw the last keeper's boat circle the island nine times, then turn and sail INTO the light. No one sailed out. The sea does not give back.\"",
+    j_echo:   "Keeper-9 (voice): \"I am the record, not the man. The man went down to the cellar and never came up. Pull the lever. Close what he opened.\"",
+    j_fog:    "Keeper-5: \"The rift is not weather. It is a door the first keeper opened to see across the water. The beam holds it shut. Feed the lamp, keeper. Feed it, or we are all the fog.\""
+  },
+  items: {
+    iron_key:{name:"iron key", desc:"A rusted iron key, salt-eaten but sound."},
+    telescope:{name:"brass telescope", desc:"A keeper's telescope. Through it, the gray reveals what the eye cannot."},
+    prism_shard:{name:"prism shard", desc:"A warm shard of the original beacon-lens. It hums faintly."},
+    brass_token:{name:"brass key-token", desc:"Stamped with the lighthouse seal — authorizes the lamp."},
+    lever:{name:"black iron lever", desc:"Heavy. Pulling it feeds the lamp from the cellar."}
+  }
+};
+
+const ENDINGS = {
+  reignition: ["THE BEACON REIGNITES", "good",
+    "You feed the lamp, raise the beam, and the rift across the water seals like a wound closing. The Fogmind unravels into ordinary rain. Gray Light stands, and so do you."],
+  crossing: ["THE CROSSING", "good",
+    "The little craft slides off the rocks. The sea, for once, looks the other way. You sail into the gray and do not come back. The island is left to the storm — but you are not."],
+  collapse: ["THE DOOR OPENS", "bad",
+    "The storm peaks and the rift tears wide. The Fogmind walks its own light into the lighthouse. Gray Light goes dark, and keeps no keeper now."],
+  drown: ["LOST TO THE SEA", "bad",
+    "The cold takes you before the work is done. The log ends here, with your hand still on the rail."]
+};
+
+let S = null;
+
+function newGame(){
+  S = {
+    loc: WORLD.start,
+    life: 100, storm: 0, beam: 0,
+    inv: [], flags: {},
+    visited: {}, readJournal: {},
+    lore: {},                  // committed lore facts for this run
+    ended: false, endKind: null,
+    log: []
+  };
+  S.visited[S.loc]=true;
+  // seed lore from spec so the LLM has a baseline
+  S.lore._seed = SPEC.seed;
+  pushLog("You wash up on the Shingle Beach of Gray Light, the last keeper alive. The storm is a wall on the horizon.","sys");
+  pushLog("Keeper-9: \"Speak plainly, keeper. The island listens, and so do I.\"","fog");
+  render();
+}
+
+function pushLog(t,cls){ S.log.push({t:String(t),c:cls||""}); }
+
+/* ---- deterministic spatial + state helpers (used by engine AND LLM validation) ---- */
+function node(){ return WORLD.nodes[S.loc]; }
+function dirToNode(dir){
+  const e = node().exits || {};
+  return e[dir] || null;
+}
+function canTravel(dir){
+  const n = node();
+  if(n.lock && n.lock.dir===dir){
+    return { ok: S.inv.includes(n.lock.key), need:n.lock.key, text:n.lock.lockedText };
+  }
+  return { ok: !!dirToNode(dir) };
+}
+function hasItem(id){ return S.inv.includes(id); }
+function itemName(id){ return (WORLD.items[id]&&WORLD.items[id].name)||id; }
+
+/* ---- resolve a natural-language direction/target to an exit key ---- */
+function normalizeDir(t, exitKeys){
+  if(!t) return null;
+  let s = String(t).toLowerCase().trim();
+  s = s.replace(/^(to |the |a |an |into |towards |through |up |down |in |out |at )+/g,"").trim();
+  const dirs = ["north_east","south_west","north","south","east","west","up","down","in","out",
+                "northeast","southwest"];
+  for(const d of dirs){
+    const plain = d.replace("_"," ");
+    if(s===d || s===plain || s.startsWith(d) || s.startsWith(plain) ||
+       new RegExp("\\b"+plain.replace(/ /g,"\\s*")+"\\b").test(s))
+      return d==="northeast"?"north_east":d==="southwest"?"south_west":d;
+  }
+  // destination name match
+  for(const ek of exitKeys){
+    const name = WORLD.nodes[node().exits[ek]].name.toLowerCase();
+    const first = name.split(" ")[0];
+    if(name.replace(/ /g,"").includes(s.replace(/ /g,"")) || s.includes(first)) return ek;
+  }
+  // aliases
+  const alias = {tower:"north", cellar:"in", base:"south", lighthouse:"north", crypt:"down",
+                 chapel:"west", beach:"south", boathouse:"south_west"};
+  for(const k in alias){ if(s.includes(k)){ const d=alias[k]; if(exitKeys.includes(d)) return d; } }
+  return null;
+}
+
+/* ---- the only ways state changes: apply an already-validated action ---- */
+function applyAction(a){
+  switch(a.action){
+    case "look": return describe();
+    case "examine": return doExamine(a.target);
+    case "go": return doGo(a.target);
+    case "take": return doTake(a.target);
+    case "use": return doUse(a.target, a.item);
+    case "ask": return doAsk(a.target, a.say);
+    case "read": return doRead(a.target);
+    case "build": return doBuild();
+    case "launch": return doLaunch();
+    case "wait": return doWait();
+    default: return {ok:false, text:"The keeper's log does not record that action."};
+  }
+}
+
+function tick(){ S.storm = Math.min(WORLD.maxStorm, S.storm+1); }
+function lifeDelta(d){ S.life = Math.max(0, Math.min(100, S.life+d)); }
+function beamDelta(d){ S.beam = Math.max(0, Math.min(5, S.beam+d)); }
+
+function describe(){
+  const n = node();
+  let txt = `— ${n.name} —\n${n.desc}`;
+  const exits = Object.keys(n.exits||{}).filter(d=>{
+    if(n.lock && n.lock.dir===d) return hasItem(n.lock.key);
+    return true;
+  });
+  if(exits.length) txt += `\n\nPaths: ${exits.join(", ")}.`;
+  const here = (n.items||[]).filter(i=>!hasItem(i));
+  if(here.length) txt += `\nYou can see: ${here.map(itemName).join(", ")}.`;
+  if(n.journal && !S.readJournal[n.journal]) txt += `\nA keeper's journal is here.`;
+  return {ok:true, text:txt, cls:"good"};
+}
+
+function doExamine(t){
+  if(!t) return {ok:false,text:"Examine what?"};
+  const tgt = String(t).toLowerCase();
+  const n = node();
+  // items here
+  const itemHere = (n.items||[]).find(i=>!hasItem(i) && itemName(i).toLowerCase().includes(tgt));
+  if(itemHere) return {ok:true, text:WORLD.items[itemHere].desc, cls:"good"};
+  // items in inv
+  const itemInv = S.inv.find(i=>itemName(i).toLowerCase().includes(tgt));
+  if(itemInv) return {ok:true, text:WORLD.items[itemInv].desc, cls:"good"};
+  // the place / feature
+  return {ok:true, text:`You study ${t}. ${n.desc}`, cls:"good"};
+}
+
+function doGo(t){
+  if(!t) return {ok:false, text:"Go where?"};
+  const dir = normalizeDir(t, Object.keys(node().exits||{}));
+  if(!dir) return {ok:false, text:"There is no such way from here.", cls:"warn"};
+  const chk = canTravel(dir);
+  if(!chk.ok){
+    return {ok:false, text:(chk.text||"That way is locked.")+` (needs: ${itemName(chk.need)})`, cls:"warn"};
+  }
+  const dest = dirToNode(dir);
+  S.loc = dest; S.visited[dest]=true; tick();
+  const r = describe();
+  // entering a new place can surface a journal automatically
+  const n=node();
+  if(n.journal && !S.readJournal[n.journal]){
+    r.text += `\n\nA keeper's journal lies here. (examine journal / read it)`;
+  }
+  // storm pressure on travel
+  if(S.storm>=9){ lifeDelta(-6); r.text += `\nThe wind flays you as you move. Life -6.`; }
+  checkStormPeak();
+  return r;
+}
+
+function doTake(t){
+  if(!t) return {ok:false, text:"Take what?"};
+  const tgt=String(t).toLowerCase();
+  const n=node();
+  const it=(n.items||[]).find(i=>!hasItem(i) && itemName(i).toLowerCase().includes(tgt));
+  if(!it) return {ok:false, text:`There is no ${t} here to take.`, cls:"warn"};
+  S.inv.push(it); tick();
+  return {ok:true, text:`You take the ${itemName(it)}.`, cls:"good"};
+}
+
+function doUse(t, item){
+  const tgt=String(t||"").toLowerCase();
+  // pull the lever in the cellar -> feeds the lamp
+  if(tgt.includes("lever") && S.loc==="storm_cellar"){
+    if(!hasItem("lever")) return {ok:false,text:"You have no lever to pull.",cls:"warn"};
+    if(S.flags.leverPulled) return {ok:true,text:"The lever is already down. The lamp is fed.",cls:"good"};
+    S.flags.leverPulled=true; beamDelta(2); tick();
+    return {ok:true, text:"You haul the black lever down. Somewhere above, the lamp groans awake. Beam +2.", cls:"good"};
+  }
+  // raise the beam in the lamp room (needs lever fed)
+  if((tgt.includes("beam")||tgt.includes("lamp")) && S.loc==="lamp_room"){
+    if(!S.flags.leverPulled) return {ok:false,text:"The lamp is cold. Feed it from the cellar first (pull the lever).",cls:"warn"};
+    if(S.beam>=5) return {ok:true,text:"The beam is already at full strength.",cls:"good"};
+    beamDelta(3); tick(); checkStormPeak();
+    return {ok:true, text:"You raise the beam. Light carves the gray — the rift shudders. Beam +3.", cls:"good"};
+  }
+  // telescope from watch post
+  if(tgt.includes("telescope") && hasItem("telescope")){
+    return {ok:true, text:"Through the glass the gray thins: you see the last keeper's boat, circling, never landing. The log was true.", cls:"fog", lore:"The last keeper's boat circles the island and never lands."};
+  }
+  // prism shard at chapel/lamp
+  if(tgt.includes("prism") && hasItem("prism_shard")){
+    return {ok:true, text:"The shard hums against your palm, aligning with the lens. The beam will hold longer when raised.", cls:"good"};
+  }
+  // bell at chapel
+  if(tgt.includes("bell") && S.loc==="chapel"){
+    return {ok:true, text:"The bell rings out. Phantom villagers dissolve like smoke. The fog's whispers quiet.", cls:"good", lore:"Ringing the chapel bell routs phantom villagers."};
+  }
+  return {ok:false, text:"You can't use that here.", cls:"warn"};
+}
+
+function doRead(t){
+  const tgt=String(t||"").toLowerCase();
+  const n=node();
+  if(n.journal && (tgt.includes("journal")||tgt==="")){
+    S.readJournal[n.journal]=true; tick();
+    const txt = WORLD.journals[n.journal];
+    commitLore("journal:"+n.journal, txt);
+    return {ok:true, text: txt + "\n\n(The words are committed to the keeper's memory.)", cls:"fog", lore:txt};
+  }
+  return {ok:false, text:"There is nothing here to read.", cls:"warn"};
+}
+
+function doAsk(t, say){
+  const tgt=String(t||"").toLowerCase();
+  if(tgt.includes("keeper")||tgt.includes("9")||!t){
+    // Keeper-9 answers from known lore/state
+    let ans = "Keeper-9: ";
+    if(say && /last keeper|previous|before|missing|what happened/.test(say))
+      ans += "\"The last keeper went down to the cellar and never came up. Pull the lever. Close what he opened.\"";
+    else if(say && /fogmind|fog|storm/.test(say))
+      ans += "\"It is not weather. It is a door the first keeper opened. The beam holds it shut. Brighter beam — more it notices you.\"";
+    else if(say && /beam|lamp|light/.test(say))
+      ans += "\"Feed the lamp from the cellar, then raise it from the lamp room. The prism shard steadies it.\"";
+    else if(say && /escape|leave|boat|sea/.test(say))
+      ans += "\"Build the craft in the boathouse, if you have the shard and the lever's work done. Then launch. The sea may or may not look away.\"";
+    else
+      ans += "\"I am the record, not the man. Explore. Read what the keepers left. The island tells its own history.\"";
+    return {ok:true, text:ans, cls:"fog"};
+  }
+  return {ok:true, text:`You call into the gray. Only the wind answers — and something in it memorizes your voice.`, cls:"fog"};
+}
+
+function doBuild(){
+  if(S.loc!=="boathouse") return {ok:false,text:"There is nothing to build here.",cls:"warn"};
+  if(S.flags.craftBuilt) return {ok:true,text:"The craft is already built. Launch it when ready.",cls:"good"};
+  if(!hasItem("prism_shard")) return {ok:false,text:"You need the prism shard to steady a craft against the fog.",cls:"warn"};
+  if(!S.flags.leverPulled) return {ok:false,text:"The lamp must be fed (lever pulled) before the sea will let a craft launch.",cls:"warn"};
+  S.flags.craftBuilt=true; tick();
+  return {ok:true, text:"You lash the timbers and set the prism shard at the prow. A small craft takes shape. (launch it to flee)", cls:"good"};
+}
+
+function doLaunch(){
+  if(!S.flags.craftBuilt) return {ok:false,text:"There is no craft to launch.",cls:"warn"};
+  endGame("crossing"); return {ok:true,text:"",cls:"good"};
+}
+
+function doWait(){
+  tick(); lifeDelta(-2);
+  let txt="You hold your ground. The storm advances. Life -2.";
+  checkStormPeak();
+  return {ok:true, text:txt, cls:"warn"};
+}
+
+/* ---- win / lose ---- */
+function checkStormPeak(){
+  if(S.ended) return;
+  if(S.storm>=WORLD.maxStorm){
+    if(S.beam>=5) endGame("reignition");
+    else endGame("collapse");
+  } else if(S.life<=0){
+    endGame("drown");
+  }
+}
+
+function commitLore(key, fact){
+  if(fact) S.lore[key]=fact;
+}
+
+function endGame(kind){
+  S.ended=true; S.endKind=kind;
+  const e=ENDINGS[kind];
+  pushLog(e[2], e[1]);
+  render();
+  showEnd(e[0], e[2], e[1]);
+}
+
+/* ============================================================
+   LLM LAYER — interpret plain language into an action JSON,
+   then validate against the deterministic engine. Offline
+   regex fallback when no key / call fails (the spine always works).
+   ============================================================ */
+const ACTION_VERB = {
+  go:["go","walk","move","head","climb","enter","run","travel","south","north","east","west","up","down","in","out","leave"],
+  take:["take","grab","pick","collect","get","pocket"],
+  examine:["examine","inspect","look at","study","search","observe"],
+  read:["read"],
+  use:["use","pull","raise","ring","activate","operate","turn"],
+  ask:["ask","tell","question","say","speak"],
+  build:["build","construct","make","craft","lash"],
+  launch:["launch","flee","sail","escape","leave the island"],
+  look:["look","describe","where","what can i see","survey","scan"],
+  wait:["wait","rest","hold","pause","stay"]
+};
+
+function offlineParse(text){
+  const t=text.toLowerCase().trim();
+  // "examine/read journal" and "read it" -> read
+  if(/(journal|it|log|book)/.test(t) && ACTION_VERB.read.some(v=>t.startsWith(v))){
+    return {action:"read", target:"journal", item:null, say:text};
+  }
+  if(/(journal|log|book)/.test(t) && ACTION_VERB.examine.some(v=>t.includes(v))){
+    return {action:"read", target:"journal", item:null, say:text};
+  }
+  for(const [act,verbs] of Object.entries(ACTION_VERB)){
+    for(const v of verbs){
+      if(t.startsWith(v+" ")||t===v||(" "+t).includes(" "+v+" ")){
+        let rest=t.slice(t.indexOf(v)+v.length).replace(/^( me | the | a | an | to | towards | into | in | up | down | north | south | east | west | at )+/g,"").trim();
+        return {action:act, target:rest||null, item:rest||null, say:text};
+      }
+    }
+  }
+  // directional shorthand
+  for(const d of ["north","south","east","west","up","down","in","out"]){
+    if(new RegExp("\\b"+d+"\\b").test(t)) return {action:"go", target:d};
+  }
+  return {action:"look", target:null, item:null, say:text};
+}
+
+async function callLLM(text){
+  const key = (document.getElementById("apiKey").value||"").trim();
+  if(!key) return null;
+  const sys = `You are the interpreter for a text adventure called York: Gray Light. `+
+    `Convert the player's plain-language command into a JSON action object. `+
+    `Strict schema: {"action": one of [go,take,examine,read,use,ask,build,launch,look,wait], `+
+    `"target": string|null (thing or direction), "item": string|null (item used), "say": string|null (words spoken to Keeper-9)}. `+
+    `Respond with ONLY the JSON object, no markdown, no commentary. `+
+    `World rules (never violate): ${SPEC.constraints.join(" ")} `+
+    `Known lore so far: ${JSON.stringify(S.lore).slice(0,600)}. `+
+    `Current place: ${node().name}. Inventory: ${S.inv.map(itemName).join(", ")||"empty"}.`;
+  try{
+    const r = await fetch("https://openrouter.ai/api/v1/chat/completions",{
+      method:"POST",
+      headers:{"Authorization":`Bearer ${key}`,"Content-Type":"application/json","HTTP-Referer":"http://localhost"},
+      body: JSON.stringify({model:"openrouter/free", max_tokens:200,
+        messages:[{role:"system",content:sys},{role:"user",content:text}]})
+    });
+    if(!r.ok) return null;
+    const d = await r.json();
+    const raw = (d.choices&&d.choices[0]&&d.choices[0].message&&d.choices[0].message.content)||"";
+    return extractJSON(raw);
+  }catch(e){ return null; }
+}
+
+function extractJSON(raw){
+  if(!raw) return null;
+  let s = raw.replace(/```json|```/g,"").trim();
+  const i = s.indexOf("{"), j = s.lastIndexOf("}");
+  if(i>=0&&j>i) s=s.slice(i,j+1);
+  try{ return JSON.parse(s); }catch(e){ return null; }
+}
+
+/* ---- the public turn: NL -> parse -> validate -> apply -> narrate ---- */
+async function playerTurn(text){
+  if(S.ended) return;
+  pushLog("> "+text, "you");
+  let parsed = await callLLM(text);
+  let usedLLM = !!parsed;
+  if(!parsed) parsed = offlineParse(text);
+  // normalize
+  parsed.action = (parsed.action||"look").toLowerCase();
+  parsed.target = parsed.target||null;
+  parsed.item = parsed.item||null;
+  parsed.say = parsed.say||text;
+
+  const res = applyAction(parsed);
+  if(usedLLM) pushLog("(interpreted by LLM → "+parsed.action+(parsed.target?(" "+parsed.target):"")+")","llm");
+  pushLog(res.text, res.cls||"sys");
+
+  if(res.lore) commitLore("turn:"+(S.log.length), res.lore);
+  // small storm pressure noise so passive play still ticks
+  if(!S.ended && res.ok) render();
+  if(!S.ended) render();
+  window.scrollTo(0,0);
+}
+
+/* ============================================================
+   UI
+   ============================================================ */
+function bar(cls,v,max){
+  const pct=Math.max(0,Math.min(100,(v/max)*100));
+  return `<div class="meter"><div class="lab"><span>${cls.toUpperCase()}</span><span>${v|0}</span></div>`+
+    `<div class="bar f-${cls}"><i style="width:${pct}%"></i></div></div>`;
+}
+function render(){
+  document.getElementById("meters").innerHTML =
+    bar("life",S.life,100)+bar("storm",S.storm,WORLD.maxStorm)+bar("beam",S.beam,5);
+  const n=node();
+  let inv = S.inv.length? S.inv.map(itemName).join(", ") : "empty";
+  document.getElementById("inv").innerHTML = `Inventory: <b>${inv}</b> · Storm <b>${S.storm}/${WORLD.maxStorm}</b>`;
+  document.getElementById("scene").textContent = (S.ended? "—" : `— ${n.name} —\n${n.desc}`);
+  const lg=document.getElementById("log");
+  lg.innerHTML = S.log.slice(-80).map(e=>`<div class="e ${e.c}">${e.t}</div>`).join("");
+  lg.scrollTop=lg.scrollHeight;
+  // suggestions
+  const sg=document.getElementById("sug");
+  const sugs = S.ended? [] :
+    ["look","examine journal","ask Keeper-9 about the last keeper","walk north","take the iron key","read the journal"];
+  sg.innerHTML="";
+  for(const s of sugs){ const b=document.createElement("button"); b.textContent=s; b.onclick=()=>runCmd(s); sg.appendChild(b); }
+}
+function showEnd(title,body,cls){
+  document.getElementById("endTitle").textContent=title;
+  document.getElementById("endTitle").style.color = cls==="bad"?"var(--bad)":"var(--good)";
+  document.getElementById("endBody").textContent=body;
+  document.getElementById("endModal").style.display="flex";
+}
+
+function runCmd(text){
+  if(S.ended) return;
+  const input=document.getElementById("cmd");
+  input.value="";
+  document.getElementById("go").disabled=true;
+  playerTurn(text).finally(()=>{ document.getElementById("go").disabled=false; input.focus(); });
+}
+
+document.getElementById("go").onclick=()=>{ const v=document.getElementById("cmd").value.trim(); if(v) runCmd(v); };
+document.getElementById("cmd").addEventListener("keydown",e=>{ if(e.key==="Enter"){ const v=e.target.value.trim(); if(v) runCmd(v); } });
+document.getElementById("saveKey").onclick=()=>{
+  const k=document.getElementById("apiKey").value.trim();
+  if(k) localStorage.setItem("york_openrouter_key",k);
+  pushLog("Key saved to this browser. The game will use the LLM when it can, and fall back to the offline parser otherwise.","sys");
+  render();
+};
+document.getElementById("endAgain").onclick=()=>{ document.getElementById("endModal").style.display="none"; newGame(); };
+document.addEventListener("keydown",e=>{ if((e.key==="r"||e.key==="R") && !/input|textarea/i.test(e.target.tagName)){ document.getElementById("endModal").style.display="none"; newGame(); } });
+
+// restore key if present
+(function(){ const k=localStorage.getItem("york_openrouter_key"); if(k) document.getElementById("apiKey").value=k; })();
+
+newGame();
+</script>
+</body>
+</html>
