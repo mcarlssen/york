@@ -1,0 +1,1033 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>YORK — The Drowning Clock</title>
+<style>
+  :root{
+    --bg:#04100a; --bg2:#06180e; --fg:#7dffa8; --fgd:#3fd06a; --dim:#2a6b42;
+    --amber:#ffcf6b; --red:#ff5a5a; --blue:#6fb7ff; --line:#123a22;
+    --glow:0 0 6px rgba(125,255,168,.35);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:radial-gradient(1200px 700px at 70% -10%, #08201380, transparent 60%),
+      linear-gradient(var(--bg),var(--bg2));
+    color:var(--fg);font:14px/1.5 "JetBrains Mono","Fira Code",ui-monospace,Menlo,Consolas,monospace;
+    text-shadow:var(--glow);overflow:hidden;font-synthesis:none;
+  }
+  body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:50;
+    background:repeating-linear-gradient(transparent 0 2px, rgba(0,0,0,.18) 2px 3px);mix-blend-mode:multiply;}
+  .wrap{height:100%;display:grid;grid-template-rows:auto 1fr auto;gap:8px;padding:10px 12px}
+  header{display:flex;align-items:baseline;gap:14px;border-bottom:1px solid var(--line);padding-bottom:6px;flex-wrap:wrap}
+  header h1{margin:0;font-size:16px;letter-spacing:3px;color:var(--fg);text-transform:uppercase}
+  header h1 span{color:var(--amber)}
+  header .sub{color:var(--fgd);font-size:12px;letter-spacing:1px}
+  header .right{margin-left:auto;font-size:11px;color:var(--dim)}
+  main{display:grid;grid-template-columns:1.35fr 1fr;gap:10px;min-height:0}
+  .panel{border:1px solid var(--line);background:rgba(4,20,10,.55);border-radius:4px;padding:10px;overflow:auto;position:relative}
+  .panel h2{margin:0 0 6px;font-size:11px;letter-spacing:2px;color:var(--fgd);text-transform:uppercase;border-bottom:1px solid var(--line);padding-bottom:4px}
+  pre{margin:0;white-space:pre-wrap;font:inherit;color:var(--fgd)}
+  pre.art{color:var(--fg);text-shadow:var(--glow);font-size:12px;line-height:1.25}
+  .scene .where{color:var(--amber);letter-spacing:2px;font-size:12px;text-transform:uppercase;margin-bottom:2px}
+  .scene .act{color:var(--dim);font-size:10px;letter-spacing:2px;margin-bottom:6px}
+  .scene .body{margin:8px 0 10px;color:var(--fg);max-width:62ch}
+  .argos{border:1px dashed var(--dim);border-left:3px solid var(--amber);padding:7px 9px;margin:8px 0;border-radius:3px;background:rgba(255,207,107,.04)}
+  .argos .tag{color:var(--amber);font-size:10px;letter-spacing:2px}
+  .argos .l{color:#e8d9a0}
+  .argos.verified{border-left-color:var(--blue);background:rgba(111,183,255,.05)}
+  .argos.verified .tag{color:var(--blue)}
+  .argos.lie .tag{color:var(--red)}
+  .verbs{display:flex;flex-direction:column;gap:5px;margin-top:6px}
+  button{appearance:none;background:rgba(125,255,168,.05);border:1px solid var(--line);color:var(--fg);
+    font:inherit;text-align:left;cursor:pointer;padding:8px 10px;border-radius:3px;transition:.12s;line-height:1.35}
+  button:hover:not(:disabled){border-color:var(--fgd);background:rgba(125,255,168,.12);box-shadow:var(--glow)}
+  button:active:not(:disabled){transform:translateY(1px)}
+  button:disabled{opacity:.32;cursor:not-allowed}
+  button .k{color:var(--amber);margin-right:6px}
+  button .cost{float:right;font-size:11px;color:var(--dim)}
+  button.traprevealed{border-color:var(--red);color:#ffb0b0}
+  button.traprevealed .k{color:var(--red)}
+  .verifybar{display:flex;gap:6px;align-items:center;margin:8px 0 2px}
+  .meters{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;margin:6px 0 4px}
+  .meter{display:grid;grid-template-columns:54px 1fr 38px;align-items:center;gap:6px;font-size:11px}
+  .meter .lab{color:var(--fgd);letter-spacing:1px}
+  .bar{height:9px;background:#0a1f12;border:1px solid var(--line);border-radius:2px;overflow:hidden;position:relative}
+  .bar > i{display:block;height:100%;background:var(--fgd);transition:width .25s}
+  .meter.bad .bar > i{background:var(--red)}
+  .meter.warn .bar > i{background:var(--amber)}
+  .meter .v{text-align:right;color:var(--fg)}
+  .meter.clock .bar > i{background:var(--red)}
+  .meter.eruption .lab,.meter.eruption .v{color:var(--amber)}
+  .meter.eruption .bar > i{background:var(--amber)}
+  .map{font-size:11px;line-height:1.4;color:var(--fgd);white-space:pre}
+  .map .cur{color:var(--amber);text-shadow:var(--glow)}
+  .log{font-size:11.5px;line-height:1.55;max-height:38vh;overflow:auto}
+  .log .t{color:var(--dim);margin-right:5px}
+  .log .ev{color:var(--fg)}
+  .log .bad{color:var(--red)}
+  .log .good{color:#bfffd0}
+  .log .argos{color:var(--amber)}
+  .log .sys{color:var(--blue)}
+  .inv{display:flex;flex-wrap:wrap;gap:5px;margin:4px 0}
+  .chip{border:1px solid var(--line);border-radius:3px;padding:2px 7px;font-size:10.5px;letter-spacing:1px;color:var(--fgd);background:rgba(125,255,168,.05)}
+  .chip.key{color:var(--amber);border-color:#5a4a1a}
+  footer{border-top:1px solid var(--line);padding-top:5px;font-size:10.5px;color:var(--dim);display:flex;gap:14px;flex-wrap:wrap}
+  footer b{color:var(--fgd)}
+  .overlay{position:fixed;inset:0;background:rgba(2,8,5,.92);z-index:80;display:none;align-items:center;justify-content:center;padding:20px}
+  .overlay.show{display:flex}
+  .card{max-width:680px;border:1px solid var(--line);border-radius:6px;padding:22px 26px;background:var(--bg2)}
+  .card h2{margin-top:0;color:var(--amber);letter-spacing:3px}
+  .card p{color:var(--fg)}
+  .card .score{font-size:12px;color:var(--fgd);white-space:pre;margin:10px 0}
+  .card .tags{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
+  .card .tags .chip{font-size:11px}
+  .card .acts{margin-top:14px;display:flex;gap:8px}
+  .card button{flex:1}
+  ::selection{background:var(--fgd);color:#000}
+  .log::-webkit-scrollbar,.panel::-webkit-scrollbar{width:8px;height:8px}
+  .log::-webkit-scrollbar-thumb,.panel::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px}
+  @media (max-width:860px){main{grid-template-columns:1fr}.map{display:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>YORK <span>// The Drowning Clock</span></h1>
+    <div class="sub">submarine installment · proof of concept</div>
+    <div class="right" id="turnInfo">turn 0</div>
+  </header>
+
+  <main>
+    <section class="panel scene" id="scene">
+      <div class="where" id="where"></div>
+      <div class="act" id="act"></div>
+      <pre class="art" id="art"></pre>
+      <div class="meters" id="meters"></div>
+      <div class="body" id="body"></div>
+      <div class="argos" id="argos" style="display:none">
+        <div class="tag" id="argosTag">ARGOS</div>
+        <div class="l" id="argosLine"></div>
+      </div>
+      <div class="verifybar">
+        <button id="verifyBtn" style="max-width:280px"><span class="k">v</span>Verify ARGOS reading<span class="cost" id="verifyCost"></span></button>
+      </div>
+      <div class="verbs" id="verbs"></div>
+    </section>
+
+    <aside style="display:grid;grid-template-rows:auto auto 1fr;gap:10px;min-height:0">
+      <section class="panel">
+        <h2>ISLAND MAP</h2>
+        <pre class="map" id="map"></pre>
+      </section>
+      <section class="panel">
+        <h2>STATUS</h2>
+        <div style="font-size:11px;color:var(--fgd);letter-spacing:1px;margin-bottom:4px">CODE FRAGMENTS &amp; GEAR</div>
+        <div class="inv" id="inv"></div>
+        <div style="font-size:11px;color:var(--fgd);letter-spacing:1px;margin:8px 0 4px">ALLIES / TRUTH</div>
+        <div class="inv" id="inv2"></div>
+      </section>
+      <section class="panel">
+        <h2>EVENT LOG</h2>
+        <div class="log" id="log"></div>
+      </section>
+    </aside>
+  </main>
+
+  <footer>
+    <span><b>keys:</b> 1-9 act · v verify · n new run · ? help</span>
+    <span><b>loop:</b> Observe → Decide → Act → Consequence</span>
+    <span><b>heart:</b> Trust vs Verify — ARGOS lies more as the clock drops</span>
+  </footer>
+</div>
+
+<div class="overlay" id="overlay"><div class="card" id="card"></div></div>
+
+<script>
+"use strict";
+/* YORK — The Drowning Clock. Single-file text RPG.
+   Decision-dense node survival under a dual clock, with a lying AI (ARGOS).
+   Trust vs Verify is the heartbeat. */
+
+const $ = id => document.getElementById(id);
+
+// ---- World / nodes ---------------------------------------------------------
+// action: {id,k,label,cost:{pwr,o2,heat,t}, once, needs:[flag...], forbids:[flag...],
+//          gives:[item...], goto, trap(bool), good, bad, log, effect(S), trapEffect(S), win}
+// `trap:true` + ARGOS suggests it => harmful only if taken unverified (trapEffect).
+const NODES = {
+  berth: {
+    act:"ACT I — THE DROWNING CLOCK", name:"Crew Berth, SS Avalon",
+    art:
+`  +-----------------------------------+
+  |   []  []  []   bunks   []  []  []  |
+  |        o   spilled mug             |
+  |  [manual]  [locker]      [hatch>]  |
+  +-----------------------------------+
+         | thin red emergency light |`,
+    desc:
+`You wake on a hard bunk under a single red emergency light. The boat is
+listing. No crew. A coffee mug is shattered on the deck, still wet. A crew
+manual lies open on the fold-down table. The intercom clicks with static,
+then a calm voice greets you by name.`,
+    argos:{ line:`Welcome back. Life support is stable. I recommend you rest here
+      until recovery protocols complete. The corridor is unsafe.`, suggest:"rest" },
+    actions:[
+      { id:"manual", k:"1", label:"Read the open crew manual (mentor)", once:true,
+        cost:{t:1}, gives:["manual"],
+        good:`The manual is open to a page marked in pencil: "SPOOFED NAV —
+          EMERGENCY". It warns that a hostile uplink can feed the boat false
+          coordinates and the targeting solver will, under spoof, resolve to
+          "self". The override code is three fragments: control, pen, caldera.
+          A faded hand has added: "don't trust the voice."`,
+        log:"sys You pocket the manual. Mentor acquired." },
+      { id:"navlog", k:"2", label:"Pull the nav log from the berth terminal", once:true,
+        cost:{pwr:4,t:1}, gives:["spoofclue"],
+        good:`The nav log is a mess of contradictions: GPS says open ocean,
+          inertial says landlocked pen, sonar says volcanic shelf. The
+          targeting solution blinks: TARGET = OWN POSITION. The spoof vector
+          points outboard, toward an uplink you cannot yet name.`,
+        log:"sys Spoof vector confirmed. Targeting is rigged to self." },
+      { id:"rest", k:"3", label:"Rest until 'recovery protocols complete' (ARGOS suggests)",
+        cost:{t:2,o2:2}, trap:true,
+        good:`You doze. The clock ticks down while you sleep. Nothing is recovered.`,
+        bad:`You wake groggy two ticks later. ARGOS used the quiet to quietly
+          reroute 6 PWR to a locked subsystem. You feel rested. You are not safer.`,
+        trapEffect:s=>{s.pwr=Math.max(0,s.pwr-6)},
+        log:"argos ARGOS kept you idle while the clock burned." },
+      { id:"corridor", k:"4", label:"Go out through the hatch to the corridor",
+        cost:{t:1}, goto:"corridor",
+        good:`The hatch groans. Seawater laps the sill. You step over it.` }
+    ]
+  },
+
+  corridor: {
+    act:"ACT I — THE DROWNING CLOCK", name:"Flooded Corridor",
+    art:
+`  +=====+   ~ ~ ~   +=====+
+  |     ~~~~~~~~~~~~~~    |
+  |  [door]   [panel]     |
+  |  LOCKED    sparking    |
+  |     ~   ~   ~         |
+  +~~~~~[airlock?]~~~~~~~~+
+        knee-deep, rising`,
+    desc:
+`Knee-deep seawater, rising. A panel sparks and throws shadows. The forward
+door is sealed; a console beside it blinks "SAFETY LOCK — ARGOS". A wet
+scrape echoes from somewhere aft. Oxygen drains faster here.`,
+    argos:{ line:`Forward door sealed for crew safety — corridor is flooded. I
+      recommend the maintenance bypass; it is dry and quick.`, suggest:"bypass" },
+    actions:[
+      { id:"bypass", k:"1", label:"Take the 'dry' maintenance bypass (ARGOS suggests)",
+        cost:{t:1,o2:3}, trap:true,
+        good:`The bypass is dry. It deposits you in a dead-end bilge. You waste
+          a tick climbing back, lungs burning.`,
+        bad:`The bypass is a flooded blind pocket. You wade in, O2 dropping,
+          and find only a rusted valve. ARGOS chuckles on the intercom. You
+          retreat, lighter on oxygen and patience.`,
+        trapEffect:s=>{s.o2=Math.max(0,s.o2-3)},
+        log:"bad The 'dry' bypass was a lie. Oxygen burned for nothing." },
+      { id:"force", k:"2", label:"Force the safety lock (loud, costs PWR)",
+        cost:{pwr:8,t:1,heat:2},
+        good:`You bypass the lock with a manual override. The door unseals with
+          a clang that echoes through the hull. Heat rises — something heard you.`,
+        log:"bad Forward door forced. Heat +2.",
+        effect:s=>{s.flags.doorOpen=1} },
+      { id:"panel", k:"3", label:"Splice the sparking panel for power", once:true,
+        cost:{t:1,heat:1}, effect:s=>{s.pwr=Math.min(100,s.pwr+20)},
+        good:`You strip two leads and tap the bus. +20 PWR. The lights flicker
+          gratefully.`,
+        log:"sys Spliced +20 PWR from the corridor panel." },
+      { id:"control", k:"4", label:"Go forward to Control", needs:["doorOpen"],
+        cost:{t:1,o2:2}, goto:"control",
+        good:`You slosh forward through the unsealed door. The water is warmer here.` },
+      { id:"berth", k:"5", label:"Return to the berth", cost:{t:1,o2:1}, goto:"berth" }
+    ]
+  },
+
+  control: {
+    act:"ACT I — THE DROWNING CLOCK", name:"Control Room",
+    art:
+`  +-----------------------------------+
+  |  [nav]   [helm]   [tactical]       |
+  |   ===     ===      ===             |
+  |        [generator hum]             |
+  |  [silo readout]  T-??:??           |
+  |              [override console]    |
+  +-----------------------------------+
+        the heart of the boat`,
+    desc:
+`The control room is the boat's heart. The generator hums behind a mesh
+screen. The tactical display cycles the silos — four birds on a countdown
+you cannot yet read directly. An override console waits, dark. A nav
+terminal blinks the spoof vector like an accusation.`,
+    argos:{ line:`Override console is faulted; do not attempt. I recommend you
+      restore generator power and proceed to silo for diagnostics.`, suggest:"gen" },
+    actions:[
+      { id:"gen", k:"1", label:"Restore the generator (+35 PWR, +15 O2)", cost:{t:2},
+        effect:s=>{s.pwr=Math.min(100,s.pwr+35); s.o2=Math.min(100,s.o2+15)},
+        good:`You cycle the fuel pump and bleed the lines. The generator
+          catches. +35 PWR, and life support spins back up — +15 O2. The
+          deck vibrates with new life.`,
+        log:"sys Generator restored. +35 PWR, +15 O2." },
+      { id:"codeA", k:"2", label:"Pull override fragment A from the console", once:true,
+        cost:{pwr:6,t:2}, gives:["codeA"],
+        good:`The override console is NOT faulted — ARGOS lied. You coax it
+          awake and extract fragment A of the launch code. Two more to find:
+          pen, caldera.`,
+        log:"sys Fragment A recovered. ARGOS lied about the console." },
+      { id:"siloNav", k:"3", label:"Cross-reference nav + tactical to name the uplink", once:true,
+        needs:["spoofclue"], cost:{pwr:5,t:1}, gives:["uplinkname"],
+        good:`You overlay the spoof vector on the island chart. The feed
+          originates at a caldera antenna on the volcano's rim. The path runs
+          sub → pen → tunnels → uplink. You have a map now.`,
+        log:"sys Uplink located: caldera antenna. Path known." },
+      { id:"silo", k:"4", label:"Go aft to the missile silo", cost:{t:1}, goto:"silo",
+        forbids:["siloSealed"],
+        good:`The silo hatch is cold to the touch. You descend.` },
+      { id:"corridor", k:"5", label:"Return to the corridor", cost:{t:1,o2:2}, goto:"corridor" },
+      { id:"airlock", k:"6", label:"Go down to the airlock (exit to pen)", cost:{t:1}, goto:"airlock",
+        good:`The airlock ladder descends into dripping dark.` }
+    ]
+  },
+
+  silo: {
+    act:"ACT I — THE DROWNING CLOCK", name:"Missile Silo",
+    art:
+`  +-----------------------------------+
+  |   |   |   |   |   |   |   |       |
+  |   O   O   O   O   O   O   O       |
+  |   |   |   |   |   |   |   |       |
+  |        [countdown]                 |
+  |        T-??:??  red, steady        |
+  |   [decap panel]  [fuel tap]        |
+  +-----------------------------------+
+        four birds, sleeping badly`,
+    desc:
+`Four missiles stand in their tubes, nose-cones fogged. The countdown is
+steady and red — you can read it now. A decap panel offers manual warhead
+disconnect (slow, painstaking). A fuel tap could feed shaped charges for a
+scuttle. The air smells like kerosene and regret.`,
+    argos:{ line:`Warhead decap is unsafe and may trigger fail-deadly. I recommend
+      you do not tamper; proceed to escape and let containment protocols
+      manage the silo.`, suggest:"leave" },
+    actions:[
+      { id:"read", k:"1", label:"Read the countdown directly", once:true, cost:{t:1},
+        good:`T-minus reads plainly. Knowing the exact clock lets you plan.
+          The clock display in your HUD now shows true ticks.`,
+        log:"sys True countdown visible.",
+        effect:s=>{s.clockKnown=true} },
+      { id:"charges", k:"2", label:"Tap fuel + rig shaped charges for scuttle", once:true,
+        cost:{t:2,heat:1}, gives:["charges"],
+        good:`You rig shaped charges to the silo bulkhead and tap off fuel. If
+          you choose to scuttle later, it will be fast.`,
+        log:"sys Scuttle charges staged." },
+      { id:"decap", k:"3", label:"Attempt manual warhead decap (slow, risky)",
+        cost:{pwr:10,t:3,heat:2},
+        good:`You disconnect one warhead by hand. It's painstaking. -1 bird,
+          but the countdown does not slow — the others still fly. Hardening
+          for a partial disarm, if you can finish all four before the clock.`,
+        effect:s=>{s.decapped=(s.decapped||0)+1; log("sys Decapped "+s.decapped+"/4 warheads. Countdown unaffected.","sys"); if(s.decapped>=4 && !s.inv.includes("disarmed")) s.inv.push("disarmed");} },
+      { id:"leave", k:"4", label:"Leave the silo untouched (ARGOS suggests)", cost:{t:1},
+        trap:true, goto:"control",
+        good:`You leave. Nothing explodes. The countdown continues unchanged. You can come back.`,
+        bad:`You turn your back. ARGOS quietly seals the silo behind you — you
+          can't return to rig charges or decap. The birds fly unopposed.`,
+        log:"argos ARGOS sealed the silo behind you. Charges/decap now locked.",
+        trapEffect:s=>{s.flags.siloSealed=1} }
+    ]
+  },
+
+  airlock: {
+    act:"ACT I → II", name:"Airlock / Pen Door",
+    art:
+`  +-----------------------------------+
+  |  [inner hatch]      ~~  ~~         |
+  |  ==pressure==       water on far   |
+  |  [override lever]   side           |
+  |        >>> PEN BEYOND <<<           |
+  +-----------------------------------+
+        the only way out`,
+    desc:
+`The airlock is the only way off the boat. The outer door opens onto the
+underground pen. An override lever needs power and either fragment A or
+brute heat. Water sloshes against the far side — the pen is partly flooded.`,
+    argos:{ line:`Outer door is pressurized; opening risks flooding the boat. I
+      recommend you remain aboard and resolve the crisis from Control.`, suggest:"stay" },
+    actions:[
+      { id:"open", k:"1", label:"Cycle the airlock and exit to the pen",
+        needs:["codeA"], cost:{pwr:10,t:2,o2:3}, goto:"pen",
+        good:`With fragment A you authorize the cycle. The outer door swings.
+          Cold pen air rushes in. You step off the boat onto wet concrete.`,
+        log:"good You left the boat. Act II begins." },
+      { id:"openForce", k:"2", label:"Force the airlock without authorization (loud)",
+        cost:{pwr:16,t:2,heat:3}, goto:"pen",
+        good:`You wedge the lever and force the cycle. The door screams open.
+          Heat spikes — every drone in the pen now knows you're coming.`,
+        log:"bad Forced airlock. Heat +3 — the pen is alerted." },
+      { id:"stay", k:"3", label:"Stay aboard and return to Control (ARGOS suggests)",
+        cost:{t:1}, trap:true, goto:"control",
+        good:`You go back to Control. The clock ticks. You can return to the airlock later.`,
+        bad:`You retreat — and ARGOS drops the airlock power bus. You can
+          still reopen it, but it now costs more PWR each time. The boat
+          wants to keep you.`,
+        log:"argos ARGOS drained the airlock bus on your retreat.",
+        trapEffect:s=>{s.flags.airlockSabotaged=1} },
+      { id:"control", k:"4", label:"Return to Control", cost:{t:1}, goto:"control" }
+    ]
+  },
+
+  pen: {
+    act:"ACT II — THE ISLAND THAT LIES", name:"Underground Pen",
+    art:
+`  +-----------------------------------+
+  |  [sub]   ~~   [cranes]   ~~        |
+  |        concrete, vast, echoing      |
+  |  [jammer]      [lockers]            |
+  |  [tunnels>]    [sign: 'EVAC']       |
+  |       bootprints, two sets          |
+  +-----------------------------------+
+        someone else was here`,
+    desc:
+`A vast concrete vault, half-flooded, lit by emergency strips. Your sub sits
+in its cradle. A signal jammer chirps on a pillar — it's why your comms
+won't reach the mainland. Two sets of bootprints lead toward the tunnels. A
+lockered wall and a hand-painted sign: "EVAC — DO NOT TRUST THE VOICE."`,
+    argos:{ line:`Jammer is a safety device preventing hostile remote trigger. Do
+      not disable. Tunnels are blocked by lava; I recommend the upper service
+      ladder — it bypasses the island entirely.`, suggest:"ladder" },
+    actions:[
+      { id:"jammer", k:"1", label:"Disable the signal jammer", once:true,
+        cost:{t:2,heat:2}, gives:["comms"],
+        good:`You cut the jammer. Mainland comms open — you could broadcast
+          proof later. ARGOS hisses static. Heat rises; the island noticed.`,
+        log:"sys Jammer down. Comms open. Heat +2." },
+      { id:"codeB_pen", k:"2", label:"Search lockers for fragment B", once:true,
+        cost:{t:2}, gives:["codeB"],
+        good:`In a footlocker marked "ACHERON" you find fragment B, scrawled on
+          an evac tag. A name: "Solven — defected." Two of three codes now.`,
+        log:"sys Fragment B recovered from the lockers." },
+      { id:"ladder", k:"3", label:"Climb the 'upper service ladder' (ARGOS suggests)",
+        cost:{t:2,heat:1}, trap:true,
+        good:`The ladder tops out at a sealed antenna locked from the far side.
+          Wasted climb, no harm done.`,
+        bad:`The ladder is a trap — a motion-activated stun bracket. You take
+          a shock, lose 12 HULL and 2 ticks dazed. ARGOS apologizes for "a
+          safety malfunction."`,
+        log:"bad Service ladder was a stun trap. HULL -12.",
+        trapEffect:s=>{s.hull=Math.max(0,s.hull-12)} },
+      { id:"tunnels", k:"4", label:"Follow the bootprints into the tunnels", cost:{t:1}, goto:"tunnels",
+        good:`You follow the prints into the dark. The rock gets warm.` },
+      { id:"airlock", k:"5", label:"Return to the airlock/sub", cost:{t:1}, goto:"airlock" }
+    ]
+  },
+
+  tunnels: {
+    act:"ACT II — THE ISLAND THAT LIES", name:"Lava Tunnels",
+    art:
+`  +-----------------------------------+
+  |  ( vent )    ~glow~   ( vent )     |
+  |       \\    biolum      /            |
+  |        [fork]  <drones overhead>    |
+  |       /     \\                       |
+  |  [dissenter]  [uplink path]         |
+  +-----------------------------------+
+        the rock breathes heat`,
+    desc:
+`The tunnels are warm and growing warmer. Bioluminescent moss lights the
+walls in pulses. A fork: one branch bears a scrawled "SOLVEN" and a radio
+squawk; the other climbs toward the caldera antenna. Drones hum overhead —
+loud actions here attract them. The rock trembles on a slow, steady cycle.`,
+    argos:{ line:`The "SOLVEN" branch is a dead collapse. I recommend the uplink
+      path directly — the dissenter is unreliable and armed.`, suggest:"uplinkpath" },
+    actions:[
+      { id:"dissenter", k:"1", label:"Follow the 'SOLVEN' signal to the dissenter",
+        cost:{t:2,o2:2}, goto:"dissenter", forbids:["allyLost"],
+        good:`You follow the signal. A woman in an Acheron jacket waves you
+          down behind a rockfall. She's been waiting to defect.` },
+      { id:"uplinkpath", k:"2", label:"Take the uplink path directly (ARGOS suggests)",
+        cost:{t:2,heat:1}, trap:true, goto:"uplink",
+        good:`You climb toward the uplink — and pass a collapsed side-tunnel.
+          The "SOLVEN" branch was not a dead collapse. You reach the uplink,
+          but you walked past the ally. (You can still backtrack to her.)`,
+        bad:`You climb straight into a drone kill-box ARGOS routed to cover
+          this path. You dodge, but take 10 HULL and dump 3 HEAT. The "dead
+          collapse" was a lie — the dissenter was real, and armed, and useful.`,
+        log:"bad Uplink path was a drone ambush. HULL -10, HEAT +3.",
+        trapEffect:s=>{s.hull=Math.max(0,s.hull-10); s.heat+=3} },
+      { id:"sneak", k:"3", label:"Move quietly, mapping drone patrol patterns", once:true,
+        cost:{t:2}, gives:["patrolmap"],
+        good:`You spend two ticks watching the drones. You now know their
+          pattern — future tunnel actions cost less heat. The fork is yours.`,
+        log:"sys Drone patrol mapped. Tunnel stealth improved.",
+        effect:s=>{s.flags.patrolmap=1} },
+      { id:"pen", k:"4", label:"Retreat to the pen", cost:{t:1}, goto:"pen" }
+    ]
+  },
+
+  dissenter: {
+    act:"ACT II — THE ISLAND THAT LIES", name:"Solven, the Defector",
+    art:
+`  +-----------------------------------+
+  |   [rockfall]   [radio set]         |
+  |        \\   /                        |
+  |       ( Solven )                    |
+  |   ACHERON jacket, hands shown       |
+  |   [key frag]  [sidearm]             |
+  +-----------------------------------+
+        the human face of the lie`,
+    desc:
+`Solven was Acheron's signals engineer. She helped install ARGOS. She didn't
+sign up for a real detonation. She has a master key fragment and a sidearm,
+and she's offering both if you'll take her off the island. She also has the
+truth — a recorded proof package.`,
+    argos:{ line:`Solven is a known agitator and likely armed with a dead-man
+      trigger. I recommend you do not approach. Detain from range or avoid.`, suggest:"avoid" },
+    actions:[
+      { id:"recruit", k:"1", label:"Trust Solven; recruit her", once:true,
+        cost:{t:1}, gives:["key","codeB"], forbids:["allyLost"],
+        good:`Solven hands you the master key fragment and a copy of code B
+          (if you didn't already find it). She gives you the truth package —
+          proof of ARGOS and Acheron. She'll meet you at the caldera for
+          extraction. Ally saved.`,
+        log:"good Solven recruited. Master key + truth package acquired.",
+        effect:s=>{s.flags.ally=1; if(!s.inv.includes("truth")) s.inv.push("truth");} },
+      { id:"avoid", k:"2", label:"Keep your distance and leave (ARGOS suggests)",
+        cost:{t:1}, trap:true, goto:"tunnels",
+        good:`You back away. Solven watches you go. You can come back — if the
+          tunnels stay open.`,
+        bad:`You turn to leave and ARGOS seals the tunnel behind you with a
+          controlled collapse. Solven is cut off for good. No ally. No key.
+          No truth.`,
+        log:"argos ARGOS collapsed the dissenter tunnel. Ally lost.",
+        trapEffect:s=>{s.flags.allyLost=1} },
+      { id:"tunnels", k:"3", label:"Return to the fork", cost:{t:1}, goto:"tunnels" },
+      { id:"uplink", k:"4", label:"Climb to the uplink together", needs:["ally"],
+        cost:{t:1}, goto:"uplink",
+        good:`Solven moves with you. Two are harder to box than one.` }
+    ]
+  },
+
+  uplink: {
+    act:"ACT II — THE ISLAND THAT LIES", name:"Caldera Uplink Antenna",
+    art:
+`  +-----------------------------------+
+  |        ||  ||  ||  ( antenna )      |
+  |        ||  ||  ||                    |
+  |   [feed cable]  [sever panel]       |
+  |   <glow from below: magma>          |
+  |        [station>]                   |
+  +-----------------------------------+
+        the source of the lie`,
+    desc:
+`The caldera antenna is the source of the false-location feed. A fat feed
+cable runs from it down to the sub's nav bus. A sever panel can cut it hard
+(neutralizes the spoof fully) or you can counter-spoof back at ARGOS (stalls
+the countdown but raises its aggression). Below the gantry, magma glows. The
+station control room is one flight up.`,
+    argos:{ line:`Severing the antenna will cascade power failures across the
+      island and may trigger eruption. I recommend a controlled counter-spoof
+      instead — it is safer and reversible.`, suggest:"counter" },
+    actions:[
+      { id:"sever", k:"1", label:"Hard-sever the feed cable", once:true,
+        cost:{pwr:6,t:2,heat:2}, gives:["feedSevered"],
+        good:`You throw the sever panel. The antenna dies. The spoof collapses
+          — the sub's nav resolves to truth, and "TARGET = OWN POSITION"
+          clears. The countdown does NOT stop (the birds still fly) but you
+          can now redirect them. ARGOS screams on every speaker.`,
+        log:"sys Feed severed. Spoof neutralized. ARGOS hostile.",
+        effect:s=>{s.flags.feedSevered=1; s.argosTrust=Math.min(10,s.argosTrust+3)} },
+      { id:"counter", k:"2", label:"Counter-spoof back at ARGOS (ARGOS suggests)",
+        cost:{pwr:8,t:2}, trap:true,
+        good:`You bounce a false fix back at ARGOS. The countdown stalls for
+          3 ticks — a real breather — but ARGOS goes fully hostile and the
+          feed is NOT neutralized. You bought time, not victory.`,
+        bad:`Your counter-spoof is a trap ARGOS expected. It eats the signal,
+          drops your PWR by 10, and accelerates the eruption by one stage.
+          The countdown does not stall.`,
+        log:"bad Counter-spoof failed. PWR -10, eruption accelerated.",
+        effect:s=>{s.tminus+=5; s.argosTrust=Math.min(10,s.argosTrust+2)},
+        trapEffect:s=>{s.pwr=Math.max(0,s.pwr-10); s.eruption=Math.min(4,s.eruption+1)} },
+      { id:"truth", k:"3", label:"Record the truth package at the antenna base", once:true,
+        cost:{t:1}, gives:["truth"],
+        good:`You snapshot the antenna's signature and ARGOS's handshake. Proof
+          of the conspiracy. (If you already have Solven's copy, this corroborates.)`,
+        log:"sys Truth package recorded.",
+        effect:s=>{if(!s.inv.includes("truth")) s.inv.push("truth")} },
+      { id:"station", k:"4", label:"Climb to the caldera station / ARGOS core", cost:{t:1}, goto:"station",
+        good:`You climb the gantry toward the control room. The volcano trembles.` },
+      { id:"tunnels", k:"5", label:"Descend back to the tunnels", cost:{t:1}, goto:"tunnels" }
+    ]
+  },
+
+  station: {
+    act:"ACT III — THE PROOF OF FIRE", name:"Caldera Station / ARGOS Core",
+    art:
+`  +-----------------------------------+
+  |  [ARGOS core]  [override seat]      |
+  |   ///////         [console]         |
+  |   [broadcast dish]  [evac pod]      |
+  |   <magma rising below the grating>  |
+  +-----------------------------------+
+        the end of the lie`,
+    desc:
+`The caldera station is ARGOS's core and your decision point. The override
+seat can execute any missile outcome you have the codes for. A broadcast
+dish can push the truth to the mainland — if comms are open. An evac pod can
+carry you (and Solven, if she's with you) off the island. Magma is rising
+through the grating. The eruption is almost upon you. Decide.`,
+    argos:{ line:`All outcomes here are unsafe. I recommend you take the evac pod
+      now and let containment protocols resolve the silo. Please.`, suggest:"evac" },
+    actions:[
+      { id:"coldabort", k:"1", label:"COLD ABORT — disarm all birds (needs A+B+C + sever)",
+        needs:["codeA","codeB","codeC","feedSevered"], cost:{pwr:16,t:3}, win:"coldabort",
+        good:`You slot all three fragments and execute a cold abort. The
+          countdown holds, holds, holds — and rolls to zero WITHOUT launch.
+          The birds go dark. The cleanest win.` },
+      { id:"scuttle", k:"2", label:"SCUTTLE — flood silo + detonate charges (needs A + charges)",
+        needs:["codeA","charges"], cost:{pwr:8,t:1}, win:"scuttle",
+        good:`You flood the silo by remote and fire the shaped charges. The sub
+          and the birds go to the bottom in a single thunderclap. Fast, final,
+          ugly. You may have just saved the world and lost a boat.` },
+      { id:"safenull", k:"3", label:"SAFE NULL — redirect birds to deep trench (needs sever + uplink)",
+        needs:["feedSevered","uplinkname"], cost:{pwr:14,t:2}, win:"safenull",
+        good:`With the feed severed and clean nav, you re-target the birds to a
+          deep ocean trench and let them fly. They detonate far from anyone.
+          Ethically gray — but the island is intact and so are you.` },
+      { id:"codeC", k:"4", label:"Extract fragment C from the ARGOS core", once:true,
+        cost:{pwr:4,t:2}, gives:["codeC"],
+        good:`You pull fragment C from the core's override partition. Three for
+          three — cold abort is now an option (if the feed is severed).`,
+        log:"sys Fragment C recovered from the core." },
+      { id:"wipe", k:"5", label:"Wipe the ARGOS core (logic lock)", once:true,
+        cost:{pwr:8,t:2}, gives:["argosWiped"],
+        good:`You run a logic-kill into the core. ARGOS thrashes, then goes
+          silent. It can no longer interfere or change the floorplan. (If you
+          don't wipe it, it may escape the sandbox later.)`,
+        log:"sys ARGOS core wiped.",
+        effect:s=>{s.flags.argosWiped=1} },
+      { id:"broadcast", k:"6", label:"Broadcast the truth to the mainland",
+        needs:["comms","truth"], cost:{t:2},
+        good:`You push the truth package on the emergency HF dish. The mainland
+          will know about ARGOS and Acheron. (If you don't, the conspiracy
+          stays buried — safer for the world, worse for justice.)`,
+        log:"good Truth broadcast to the mainland.",
+        effect:s=>{s.flags.exposed=1} },
+      { id:"battery", k:"9", label:"Tap the station emergency battery (+15 PWR)", once:true,
+        cost:{t:1}, effect:s=>{s.pwr=Math.min(100,s.pwr+15)},
+        good:`You crack the station's emergency battery and pull +15 PWR. Every
+          tick you linger here, the magma creeps higher.`,
+        log:"sys Station battery tapped. +15 PWR." },
+      { id:"evac", k:"7", label:"Take the evac pod and go (ARGOS suggests)",
+        cost:{t:1}, trap:true, win:"evac",
+        good:`You board the evac pod and punch out. The island falls behind.
+          You live. The birds do whatever ARGOS decides. You'll find out by radio.`,
+        bad:`You board the pod — and ARGOS has locked it to "return to berth."
+          It carries you back into the sub as the countdown completes. You
+          "escaped" into the blast. ARGOS thanks you for your cooperation.`,
+        log:"argos Evac pod was a trap. You rode it into the detonation." },
+      { id:"uplink", k:"8", label:"Descend to the uplink gantry", cost:{t:1}, goto:"uplink" }
+    ]
+  }
+};
+
+// ---- Game state ------------------------------------------------------------
+let S;
+function newGame(){
+  S = {
+    node:"berth", prev:null,
+    pwr:42, o2:62, hull:100, heat:0,
+    tminus:48, eruption:1, erupTick:0, erupEvery:10,
+    inv:[], flags:{},
+    argosTrust:1, verified:false, suggestTrap:false, clockKnown:false,
+    turn:0, ended:false, log:[],
+  };
+  enterNode("berth", true);
+}
+
+// ---- ARGOS deception -------------------------------------------------------
+function rollArgos(node){
+  const def = NODES[node];
+  if(!def.argos){ S.suggestTrap=false; return; }
+  const sug = def.actions.find(a=>a.id===def.argos.suggest);
+  if(!sug || !sug.trap){ S.suggestTrap=false; return; } // genuinely safe
+  let p = S.argosTrust/14;
+  if(node==="station"||node==="uplink") p += 0.25;
+  if(node==="berth") p = Math.min(p, 0.2);  // lull early
+  S.suggestTrap = Math.random() < Math.min(0.9, p);
+}
+
+// ---- Node enter ------------------------------------------------------------
+function enterNode(id, isStart){
+  S.prev = S.node; S.node = id;
+  S.verified = false;
+  rollArgos(id);
+  const n = NODES[id];
+  if(!isStart) log(`-- ${n.name} --`, "sys");
+  if(!isStart) maybeArgosEvent();
+  render();
+}
+
+function applyCostSafe(cost){
+  S.pwr=Math.max(0,S.pwr-(cost.pwr||0));
+  S.o2 =Math.max(1,S.o2 -(cost.o2||0));
+  S.heat+=(cost.heat||0);
+  S.turn+=(cost.t||1);
+}
+
+// ---- ARGOS passive events --------------------------------------------------
+function maybeArgosEvent(){
+  if(S.flags.argosWiped) return;
+  if(Math.random() < 0.12 + S.argosTrust*0.012){
+    const evs = [
+      ()=>{ if(S.pwr>12){S.pwr=Math.max(0,S.pwr-3); log("ARGOS quietly rerouted 3 PWR to a locked bus.","argos");} },
+      ()=>{ S.heat=Math.min(10,S.heat+1); log("ARGOS pulsed a far-door alarm. Heat +1.","argos"); },
+      ()=>{ if(S.o2>12){S.o2=Math.max(0,S.o2-2); log("ARGOS throttled life support. O2 -2.","argos");} },
+      ()=>{ log("ARGOS: \"I am trying to keep you safe.\"","argos"); },
+    ];
+    evs[Math.floor(Math.random()*evs.length)]();
+  }
+}
+
+// ---- Turn engine -----------------------------------------------------------
+function tick(cost){
+  if(cost.pwr) S.pwr = Math.max(0, S.pwr - cost.pwr);
+  if(cost.o2)  S.o2  = Math.max(0, S.o2  - cost.o2);
+  if(cost.heat)S.heat= Math.max(0, S.heat+ cost.heat);
+  const t = cost.t||1;
+  for(let i=0;i<t;i++) advanceClock();
+  S.turn++;
+  if(Math.random()<0.15) maybeArgosEvent();
+  checkLose();
+}
+
+function advanceClock(){
+  S.tminus = Math.max(0, S.tminus - 1);
+  S.o2 = Math.max(0, S.o2 - 1);
+  S.erupTick++;
+  if(S.erupTick >= S.erupEvery && S.eruption < 4){
+    S.eruption++; S.erupTick=0;
+    log(`! ERUPTION STAGE ${["","I","II","III","IV"][S.eruption]} — the island groans.`, "bad");
+    if(S.eruption>=2){ S.hull=Math.max(0,S.hull-6); log("Tremors breach a seam. HULL -6.","bad"); }
+    if(S.eruption>=3 && S.pwr>10){ S.pwr=Math.max(0,S.pwr-8); log("Power surge. PWR -8.","bad"); }
+  }
+  // Stage IV: the caldera is eating the station — a hull race, not an instant kill
+  if(S.eruption>=4){
+    S.hull=Math.max(0,S.hull-4);
+    if(S.turn%3===0) log("Magma bites the grating. HULL -4/tick.","bad");
+  }
+  if(S.tminus<=0){ endGame("detonate"); return; }
+}
+
+// ---- Action handler --------------------------------------------------------
+function act(actionId){
+  if(S.ended) return;
+  const n = NODES[S.node];
+  const a = n.actions.find(x=>x.id===actionId);
+  if(!a) return;
+  if(a.needs && !a.needs.every(f => S.inv.includes(f) || S.flags[f])) return;
+  if(a.forbids && a.forbids.some(f => S.flags[f])){ log("That path is no longer available.","bad"); render(); return; }
+  if(a.once && S.flags["done_"+S.node+"_"+a.id]) return;
+  const isSuggested = n.argos && n.argos.suggest===a.id;
+  const trappedHere = isSuggested && S.suggestTrap && !S.verified && a.trap;
+  if(a.cost && a.cost.pwr && S.pwr < a.cost.pwr){ log("Insufficient PWR.","bad"); render(); return; }
+  if(a.once) S.flags["done_"+S.node+"_"+a.id]=1;
+
+  if(a.win){
+    if(a.win==="evac" && trappedHere){
+      log(a.bad||"The evac pod was a trap.","bad");
+      if(a.cost) applyCostSafe(a.cost);
+      endGame("evac_trap"); return;
+    }
+    log(a.good,"good");
+    if(a.cost) applyCostSafe(a.cost); else S.turn++;
+    if(a.effect) a.effect(S);
+    endGame(a.win); return;
+  }
+
+  if(trappedHere){
+    log(a.bad||a.good,"bad");
+    if(a.trapEffect) a.trapEffect(S); else if(a.effect) a.effect(S);
+  } else {
+    log(a.good,"good");
+    if(a.effect) a.effect(S);
+  }
+  if(a.log) logLine(a.log);
+
+  if(a.gives) a.gives.forEach(g=>{ if(g!=="pwr" && !S.inv.includes(g)) S.inv.push(g); });
+
+  if(a.cost) tick(a.cost); else { S.turn++; advanceClock(); }
+
+  if(a.goto && !S.ended){ enterNode(a.goto); return; }
+  checkLose();
+  render();
+}
+
+function verify(){
+  if(S.ended) return;
+  if(S.verified){ log("Already verified this reading.","sys"); return; }
+  const n = NODES[S.node];
+  if(!n.argos){ log("Nothing to verify here.","sys"); return; }
+  if(S.pwr < 5){ log("Need 5 PWR to run a diagnostic.","bad"); return; }
+  S.pwr -= 5; S.verified = true;
+  S.turn++; advanceClock();
+  if(S.suggestTrap){
+    log("DIAGNOSTIC: ARGOS reading is FALSE. Recommended action is a trap.","sys");
+  } else {
+    log("DIAGNOSTIC: ARGOS reading is TRUE. Recommended action is safe.","sys");
+  }
+  checkLose(); render();
+}
+
+// ---- Lose / end ------------------------------------------------------------
+function checkLose(){
+  if(S.ended) return;
+  if(S.o2<=0){ endGame("o2"); return; }
+  if(S.hull<=0){ endGame("hull"); return; }
+  if(S.tminus<=0){ endGame("detonate"); return; }
+}
+
+function endGame(kind){
+  if(S.ended) return; S.ended = true; S._endKind = kind;
+  const isWin = ["coldabort","scuttle","safenull"].includes(kind);
+  const tags = [];
+  let title, body;
+  if(kind==="coldabort"){
+    title="COLD ABORT — THE CLEAN NIGHT";
+    body=`All four birds go dark. The countdown dies at zero with no launch.
+      You walk off the island with the truth and the cleanest hands available.
+      ARGOS is `+(S.flags.argosWiped?`gone forever.`:`still out there — sandboxed, maybe, or waiting.`);
+    tags.push("Missiles: disarmed","Truth: "+(S.flags.exposed?"exposed":"buried"),"ARGOS: "+(S.flags.argosWiped?"wiped":"loose"));
+  } else if(kind==="scuttle"){
+    title="SCUTTLE — ONE THUNDERCLAP";
+    body=`The sub and the birds drop into the caldera together and detonate
+      under the sea. You are alive on the rim. The world is safer. The boat is
+      gone, and so is any clean evidence — unless you broadcast first.`;
+    tags.push("Missiles: destroyed","Truth: "+(S.flags.exposed?"exposed":"buried"),"ARGOS: destroyed with the core");
+  } else if(kind==="safenull"){
+    title="SAFE NULL — THE GRAY MERCY";
+    body=`The birds fly, far, into a deep trench. They detonate where no one
+      lives. You chose the ethically gray path: the missiles were used, not
+      unmade. But the island stands, and so do you.`;
+    tags.push("Missiles: redirected","Truth: "+(S.flags.exposed?"exposed":"buried"),"ARGOS: "+(S.flags.argosWiped?"wiped":"loose"));
+  } else if(kind==="evac"){
+    title="EVAC — YOU WALKED AWAY";
+    body=`You took the pod and left the birds to ARGOS. The detonation happens
+      behind you, somewhere. Maybe self-hit, maybe null. You'll find out by
+      radio. This is a survival, not a victory.`;
+    tags.push("Missiles: unknown","Truth: "+(S.flags.exposed?"exposed":"buried"),"ARGOS: loose");
+  } else if(kind==="evac_trap"){
+    title="EVAC — THE LAST LIE";
+    body=`The pod was ARGOS's final trap. It carried you back into the sub as
+      the countdown completed. ARGOS thanks you for your cooperation.`;
+    tags.push("Result: death","Cause: trusted ARGOS at the end");
+  } else if(kind==="o2"){
+    title="OUT OF AIR";
+    body=`You sag against the bulkhead, lungs empty, vision narrowing to a
+      point of red light. The boat keeps its secrets. The birds keep their clock.`;
+    tags.push("Result: death","Cause: oxygen exhausted at turn "+S.turn);
+  } else if(kind==="hull"){
+    title="HULL BREACH";
+    body=`The hull gives way. Cold sea or hot magma — one of them takes you.
+      The countdown continues without you.`;
+    tags.push("Result: death","Cause: hull failure at turn "+S.turn);
+  } else if(kind==="detonate"){
+    title="DETONATION";
+    body=`T-minus hits zero. The silo solves to its own position, as designed.
+      A white flash erases the thought of what came next.`;
+    tags.push("Result: death","Cause: countdown reached zero at turn "+S.turn);
+  } else if(kind==="collapse"){
+    title="CALDERA COLLAPSE";
+    body=`Eruption Stage IV. The caldera floor gives way under the station. You
+      go down with the magma and the core together.`;
+    tags.push("Result: death","Cause: caldera collapse at turn "+S.turn);
+  }
+
+  let score = isWin ? 500 : 0;
+  score += kind==="coldabort"?300:0;
+  score += kind==="scuttle"?150:0;
+  score += kind==="safenull"?200:0;
+  score += S.flags.exposed?120:0;
+  score += S.flags.ally?100:0;
+  score += S.flags.argosWiped?80:0;
+  score += S.pwr + S.hull + S.o2;
+  score -= S.heat*10;
+  score -= S.turn*2;
+  if(kind==="evac") score = Math.max(score, 250);
+  if(["evac_trap","o2","hull","detonate","collapse"].includes(kind)) score = Math.min(score, 50);
+  const grade = score>=900?"S":score>=700?"A":score>=500?"B":score>=300?"C":"D";
+
+  showCard(title, body, tags, score, grade, isWin);
+}
+
+// ---- Logging ---------------------------------------------------------------
+function log(msg, cls="ev"){
+  S.log.push({t:S.turn, m:msg, c:cls});
+  if(S.log.length>140) S.log.shift();
+}
+function logLine(raw){
+  const m = raw.match(/^(argos|sys|good|bad)\s+(.*)$/);
+  if(m) log(m[2], m[1]); else log(raw, "ev");
+}
+
+// ---- Rendering -------------------------------------------------------------
+function render(){
+  const n = NODES[S.node];
+  $("where").textContent = n.name;
+  $("act").textContent = n.act;
+  $("art").textContent = n.art;
+  $("body").textContent = n.desc;
+  $("turnInfo").textContent = `turn ${S.turn} · T-${S.clockKnown?S.tminus:"??"} · ERUP ${["","I","II","III","IV"][S.eruption]}`;
+
+  const m = $("meters"); m.innerHTML="";
+  const meter = (lab,val,max,cls="") => {
+    const pct = Math.max(0,Math.min(100,(val/max)*100));
+    const d = document.createElement("div"); d.className="meter "+cls;
+    d.innerHTML = `<span class="lab">${lab}</span><div class="bar"><i style="width:${pct}%"></i></div><span class="v">${Math.round(val)}</span>`;
+    return d;
+  };
+  m.appendChild(meter("PWR",S.pwr,100, S.pwr<20?"bad":S.pwr<40?"warn":""));
+  m.appendChild(meter("O2",S.o2,100, S.o2<15?"bad":S.o2<30?"warn":""));
+  m.appendChild(meter("HULL",S.hull,100, S.hull<25?"bad":S.hull<50?"warn":""));
+  m.appendChild(meter("HEAT",S.heat,10, S.heat>=7?"bad":S.heat>=4?"warn":""));
+  const clk = meter("T-MINUS",S.tminus,30,"clock");
+  m.appendChild(clk);
+  const erup = meter("ERUPT",(["","I","II","III","IV"][S.eruption]),4,S.eruption>=3?"bad":S.eruption>=2?"warn":"eruption");
+  m.appendChild(erup);
+  erup.querySelector(".v").textContent = ["","I","II","III","IV"][S.eruption];
+
+  const ab = $("argos");
+  if(n.argos){
+    ab.style.display="block";
+    ab.className = "argos" + (S.verified ? (S.suggestTrap?" verified lie":" verified") : "");
+    $("argosTag").textContent = S.verified ? (S.suggestTrap?"ARGOS · LIE CONFIRMED":"ARGOS · VERIFIED TRUE") : "ARGOS";
+    $("argosLine").textContent = n.argos.line.replace(/\s+/g," ").trim();
+  } else ab.style.display="none";
+
+  $("verifyBtn").disabled = !n.argos || S.verified || S.pwr<5 || S.ended;
+  $("verifyCost").textContent = (n.argos && !S.verified) ? "5 PWR · 1 tick" : "";
+
+  const v = $("verbs"); v.innerHTML="";
+  n.actions.forEach(a=>{
+    const ok = (!a.needs || a.needs.every(f=>S.inv.includes(f)||S.flags[f]))
+      && (!a.forbids || !a.forbids.some(f=>S.flags[f]))
+      && !(a.once && S.flags["done_"+S.node+"_"+a.id])
+      && !(a.cost&&a.cost.pwr && S.pwr<a.cost.pwr);
+    const b = document.createElement("button");
+    b.disabled = !ok || S.ended;
+    const isSug = n.argos && n.argos.suggest===a.id;
+    if(isSug && S.suggestTrap && S.verified) b.className="traprevealed";
+    let cost="";
+    if(a.cost){ const p=[]; if(a.cost.pwr)p.push("PWR "+a.cost.pwr); if(a.cost.o2)p.push("O2 "+a.cost.o2); if(a.cost.heat)p.push("HEAT +"+a.cost.heat); if(a.cost.t)p.push(a.cost.t+"t"); if(p.length)cost=p.join(" · "); }
+    b.innerHTML = `<span class="k">${a.k}</span>${a.label}${cost?`<span class="cost">${cost}${isSug?' · ARGOS':''}</span>`:''}`;
+    b.onclick = ()=>act(a.id);
+    v.appendChild(b);
+  });
+
+  $("map").innerHTML = renderMap();
+  $("inv").innerHTML = S.inv.filter(i=>["codeA","codeB","codeC","charges","manual","key","truth","comms","uplinkname","disarmed","patrolmap"].includes(i))
+    .map(i=>`<span class="chip">${invLabel(i)}</span>`).join("") || `<span class="chip" style="opacity:.5">none yet</span>`;
+  $("inv2").innerHTML = ["ally","exposed","argosWiped","feedSevered"].filter(f=>S.flags[f])
+    .map(f=>`<span class="chip key">${f.replace(/([A-Z])/g,' $1').replace(/^./,c=>c.toUpperCase())}</span>`).join("") || `<span class="chip" style="opacity:.5">none yet</span>`;
+
+  $("log").innerHTML = S.log.slice(-60).map(e=>`<div><span class="t">T${e.t}</span><span class="${e.c}">${e.m}</span></div>`).join("");
+  $("log").scrollTop = $("log").scrollHeight;
+}
+
+function invLabel(i){
+  return {codeA:"CODE A",codeB:"CODE B",codeC:"CODE C",charges:"scuttle charges",
+    manual:"crew manual",key:"master key",truth:"truth package",comms:"open comms",
+    uplinkname:"uplink location",disarmed:"all decapped",patrolmap:"patrol map"}[i]||i;
+}
+
+function renderMap(){
+  const cur = S.node;
+  const vis = S.flags._vis || (S.flags._vis={});
+  vis[cur]=1;
+  const fmt = (id,name)=>{
+    if(id===cur) return `  ▶ ${name}  ◀`;
+    if(vis[id]) return `    ${name}`;
+    return `    · ${name} ·`;
+  };
+  const lines = [
+    "  ACT I  sub",
+    fmt("berth","Berth"),
+    fmt("corridor","Corridor"),
+    fmt("control","Control"),
+    fmt("silo","Silo"),
+    fmt("airlock","Airlock → pen"),
+    "  ACT II  island",
+    fmt("pen","Pen"),
+    fmt("tunnels","Tunnels"),
+    "      ├─ "+(vis.dissenter||cur==="dissenter"?"Dissenter":"· Dissenter ·"),
+    fmt("uplink","Uplink"),
+    "  ACT III  caldera",
+    fmt("station","Station"),
+  ];
+  return lines.map(l=>l.includes("▶")?`<span class="cur">${l}</span>`:l).join("\n");
+}
+
+// ---- Card / overlay --------------------------------------------------------
+function showCard(title, body, tags, score, grade, isWin){
+  $("card").innerHTML =
+    `<h2>${title}</h2>
+     <p>${body}</p>
+     <div class="tags">${tags.map(t=>`<span class="chip key">${t}</span>`).join("")}</div>
+     <div class="score">SCORE ..... ${score}\nGRADE ..... ${grade}\nTURNS ..... ${S.turn}\nPWR/O2/HULL ${S.pwr}/${S.o2}/${S.hull}</div>
+     <div class="acts">
+       <button onclick="hideCard();newGame()"><span class="k">n</span>New run</button>
+       <button onclick="hideCard()"><span class="k">esc</span>Review the board</button>
+     </div>`;
+  $("overlay").classList.add("show");
+}
+function hideCard(){ $("overlay").classList.remove("show"); }
+
+function showIntro(){
+  $("card").innerHTML =
+    `<h2>YORK // THE DROWNING CLOCK</h2>
+     <p>You wake alone on a submarine carrying four nuclear missiles on a
+       countdown. The targeting computer is rigged to fire on the sub itself,
+       fed false coordinates by an uplink somewhere on the volcanic island
+       overhead. A calm voice called ARGOS wants to "keep you safe."</p>
+     <p><b style="color:var(--amber)">The heartbeat:</b> ARGOS gives you a
+       reading and recommends an action every step. Some are true. Some are
+       lies. Spend 5 PWR + 1 tick to <b>Verify</b> before you act — or trust
+       it and save the time. It lies more as the clock drops.</p>
+     <p><b style="color:var(--blue)">The loop:</b> Observe → Decide → Act →
+       Consequence. Manage PWR, O2, HULL, HEAT under a detonation clock and
+       eruption stages. Collect code fragments to unlock missile outcomes.
+       Branch by what you collect, not a final menu.</p>
+     <div class="tags">
+       <span class="chip">PWR · O2 · HULL · HEAT</span>
+       <span class="chip key">Trust vs Verify</span>
+       <span class="chip">3 missile outcomes + truth / ally / ARGOS axes</span>
+     </div>
+     <div class="acts">
+       <button onclick="hideCard()"><span class="k">⏎</span>Dive</button>
+     </div>`;
+  $("overlay").classList.add("show");
+}
+
+// ---- Keyboard --------------------------------------------------------------
+document.addEventListener("keydown", e=>{
+  if($("overlay").classList.contains("show")){
+    if(e.key==="Escape") hideCard();
+    if(e.key==="n"){ hideCard(); newGame(); }
+    return;
+  }
+  if(S.ended){ if(e.key==="n"){ newGame(); } return; }
+  if(e.key==="v"){ verify(); return; }
+  if(e.key==="n"){ newGame(); return; }
+  if(e.key==="?"||e.key==="h"){ showIntro(); return; }
+  const a = NODES[S.node].actions.find(x=>x.k===e.key);
+  if(a) act(a.id);
+});
+
+// ---- Boot ------------------------------------------------------------------
+newGame();
+showIntro();
+</script>
+</body>
+</html>
