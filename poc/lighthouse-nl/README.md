@@ -23,6 +23,24 @@ Open [`index.html`](index.html) in any browser — no build step.
   a built-in regex parser. **The spine always works.** In testing, the LLM returned usable
   JSON on roughly half of calls and `null` on the rest; the fallback covered the gaps with
   zero breakage.
+- **Lore graph (bounded memory).** World facts are stored as a graph of nodes/edges, not a
+  growing string. The LLM prompt injects only the **top-6 nodes** most relevant to the
+  current context (tag + token overlap), so context never bloats. The graph persists to
+  `localStorage` per world id and **extends across sessions** — the world deepens each time
+  you return. See `commitLore` / `LoreGraph` in `index.html`.
+- **Rules precedence.** When lore, player intent, and the LLM conflict, the engine resolves
+  highest-first: (1) hard rules, (2) lore/state consistency, (3) player intent, (4) LLM
+  prose. The engine rejects any action violating a higher tier — e.g. a lock cannot be
+  bypassed even if a lore fact "implies" it.
+
+## Functional specs live in `openspec/`
+
+The behavioral contract (engine-owns-truth, LLM interpreter, precedence, bounded memory,
+persistence) is captured as reviewable specs in [`../../openspec/specs/`](../../openspec/specs/),
+and the Gray Light **world rules + story** are authored in
+[`../../openspec/world/graylight.json`](../../openspec/world/graylight.json). Author the
+starting storyline by filling the `story_gaps` section there. The engine's in-file `SPEC` is
+a seed mirror; the `openspec/` tree is the source of truth for guidelines.
 
 ## The world spec (rules the LLM must respect)
 

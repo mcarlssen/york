@@ -1,0 +1,95 @@
+{
+  "world_id": "graylight",
+  "identity": {
+    "title": "Gray Light",
+    "tagline": "A keeper's island besieged by a sentient storm.",
+    "installment": "lighthouse",
+    "engine": "poc/lighthouse-nl/index.html"
+  },
+
+  "constraints": [
+    "Ecology is self-consistent with a cold volcanic seabird island (auklets, storm-petrels, kelp, lichen; no tropical life).",
+    "Light is both tool and beacon: the beam repels the Fogmind but draws its attention; brighter beam = more Fogmind interest.",
+    "The Fogmind corrupts perception (phantom sights, false sounds, rerouted paths), not merely vision.",
+    "Keepers are a lineage; each left a journal. The lighthouse's history IS the threat.",
+    "Actions cost time. Each meaningful action advances the storm one tick. At storm 12 the peak breaks.",
+    "A locked connection requires its key item to be in inventory before travel is allowed.",
+    "The player cannot fly, swim the open ocean, or leave the island until the boathouse craft is built and launched."
+  ],
+
+  "lore_seed": [
+    { "id": "seed",    "subject": "Gray Light", "relation": "is", "object": "a volcanic basalt islet in a vast cold ocean", "tags": ["world","island","setting"] },
+    { "id": "fogmind", "subject": "Fogmind",    "relation": "is", "object": "a sentient storm besieging the island", "tags": ["fogmind","antagonist","storm"] },
+    { "id": "keeper",  "subject": "the player", "relation": "is", "object": "the newest keeper of the lighthouse; the last keeper is missing", "tags": ["keeper","player","lore"] },
+    { "id": "light",   "subject": "light",      "relation": "is", "object": "both tool and beacon; brighter beam repels the Fogmind but draws its attention", "tags": ["beam","light","rule"] },
+    { "id": "perception", "subject": "the Fogmind", "relation": "corrupts", "object": "perception (phantom sights, false sounds, rerouted paths), not merely vision", "tags": ["fogmind","rule","perception"] },
+    { "id": "lineage", "subject": "keepers",    "relation": "are", "object": "a lineage; each left a journal; the lighthouse's history is the threat", "tags": ["keeper","lore","rule"] },
+    { "id": "time",    "subject": "each meaningful action", "relation": "advances", "object": "the storm one tick; at storm 12 the peak breaks", "tags": ["storm","rule","time"] },
+    { "id": "lockrule", "subject": "a locked connection", "relation": "requires", "object": "its key item in inventory before travel", "tags": ["rule","lock"] },
+    { "id": "noescape", "subject": "the player", "relation": "cannot", "object": "leave the island until the boathouse craft is built and launched", "tags": ["rule","escape","craft"] }
+  ],
+
+  "ecology": {
+    "_note": "Cold volcanic seabird islet. The LLM derives specifics from here; fill free-form.",
+    "climate": "cold, wind-scoured, salt",
+    "terrain": ["basalt cliffs", "shingle beach", "tide pools", "thin soil"],
+    "flora": ["kelp", "rock lichen", "saltgrass"],
+    "fauna": ["auklets", "storm-petrels", "crabs", "anemones"],
+    "TODO_narrative_ecology": "Add any story-significant species (e.g. a bird that only sings before a death) here."
+  },
+
+  "map": {
+    "start": "beach",
+    "max_storm": 12,
+    "nodes": {
+      "beach":        { "name": "Shingle Beach", "exits": { "north": "cliff_path", "west": "tide_pools" } },
+      "tide_pools":   { "name": "Tide Pools", "exits": { "east": "beach" }, "items": ["iron_key"], "journal": "j_what" },
+      "cliff_path":   { "name": "Cliff Path", "exits": { "south": "beach", "north": "tower_base", "in": "storm_cellar", "east": "watch_post" }, "lock": { "dir": "in", "key": "iron_key", "lockedText": "The storm-cellar door is locked. An iron key would turn it." } },
+      "watch_post":   { "name": "Watch Post", "exits": { "west": "cliff_path", "east": "chapel" }, "items": ["telescope"], "journal": "j_tele" },
+      "chapel":       { "name": "Chapel of the Beacon", "exits": { "west": "watch_post", "down": "crypt" }, "items": ["prism_shard"] },
+      "crypt":        { "name": "Crypt", "exits": { "up": "chapel" }, "items": ["brass_token"], "journal": "j_echo" },
+      "storm_cellar": { "name": "Storm Cellar", "exits": { "out": "cliff_path" }, "items": ["lever"], "journal": "j_fog" },
+      "tower_base":   { "name": "Lighthouse Base", "exits": { "south": "cliff_path", "up": "lamp_room", "south_west": "boathouse" } },
+      "boathouse":    { "name": "Boathouse", "exits": { "north_east": "tower_base" }, "build": "craft" },
+      "lamp_room":    { "name": "Lamp Room", "exits": { "down": "tower_base" } }
+    },
+    "journals": {
+      "j_what": "Keeper-3: \"The fog spoke in my mother's voice today. I answered it. I will not do that again. If you read this — do not answer the fog.\"",
+      "j_tele": "Keeper-7: \"Through the glass I saw the last keeper's boat circle the island nine times, then turn and sail INTO the light. No one sailed out. The sea does not give back.\"",
+      "j_echo": "Keeper-9 (voice): \"I am the record, not the man. The man went down to the cellar and never came up. Pull the lever. Close what he opened.\"",
+      "j_fog":  "Keeper-5: \"The rift is not weather. It is a door the first keeper opened to see across the water. The beam holds it shut. Feed the lamp, keeper. Feed it, or we are all the fog.\""
+    },
+    "items": {
+      "iron_key":   { "name": "iron key", "desc": "A rusted iron key, salt-eaten but sound." },
+      "telescope":  { "name": "brass telescope", "desc": "A keeper's telescope. Through it, the gray reveals what the eye cannot." },
+      "prism_shard":{ "name": "prism shard", "desc": "A warm shard of the original beacon-lens. It hums faintly." },
+      "brass_token":{ "name": "brass key-token", "desc": "Stamped with the lighthouse seal — authorizes the lamp." },
+      "lever":      { "name": "black iron lever", "desc": "Heavy. Pulling it feeds the lamp from the cellar." }
+    }
+  },
+
+  "puzzles": [
+    { "id": "cellar_lock", "rule": "storm_cellar entry requires iron_key in inventory", "enforced_by": "engine.lock" },
+    { "id": "feed_lamp",   "rule": "lever must be taken and pulled to set leverPulled", "enforced_by": "engine.use" },
+    { "id": "raise_beam",  "rule": "beam may only be raised once leverPulled", "enforced_by": "engine.use" },
+    { "id": "build_craft", "rule": "boathouse build requires prism_shard AND leverPulled", "enforced_by": "engine.build" }
+  ],
+
+  "endings": [
+    { "id": "reignition", "condition": "storm >= 12 AND beam >= 5", "tone": "good" },
+    { "id": "crossing",   "condition": "craftBuilt AND launch", "tone": "good" },
+    { "id": "collapse",   "condition": "storm >= 12 AND beam < 5", "tone": "bad" },
+    { "id": "drown",      "condition": "life <= 0", "tone": "bad" }
+  ],
+
+  "story_gaps": {
+    "_note": "YOU FILL THESE IN. The engine does not need them yet, but the LLM and journals will. Write the starting world story here.",
+    "origin_of_the_rift": "TODO: what is the 'door' the first keeper opened, and why?",
+    "the_first_keeper": "TODO: name + fate of the keeper who opened it.",
+    "the_last_keeper": "TODO: who were they, and what truly happened (the boat circling is a clue, not the answer).",
+    "keeper_9_truth": "TODO: is Keeper-9 a person, a recording, or the lighthouse itself?",
+    "the_island_kind": "TODO: confirm 'cold volcanic seabird islet' or redefine; the LLM derives ecology from this.",
+    "why_a_lineage": "TODO: why do keepers succeed one another, and what do they protect besides the lamp?",
+    "the_crossing_destination": "TODO: if the player flees by sea, where (if anywhere) do they go?"
+  }
+}

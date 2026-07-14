@@ -241,6 +241,74 @@ const ENDINGS = {
 };
 
 let S = null;
+let LORE = null;          // persistent LoreGraph, loaded from storage or seeded
+
+/* ============================================================
+   LORE GRAPH — bounded, queryable world memory.
+   Facts are nodes {id,subject,relation,object,text,source,tags,turn};
+   related facts are linked by edges. Retrieval returns only the
+   top-K most relevant nodes for the current context, so the LLM
+   prompt never bloats. Persisted per world id across sessions.
+   ============================================================ */
+const LORE_STORE_KEY = "york_lore_v1";
+const WORLD_ID = "graylight";
+
+function LoreGraph(){
+  this.nodes = {};        // id -> node
+  this.edges = [];        // {from,to,rel}
+  this.seq = 0;
+}
+LoreGraph.prototype.commit = function(subject, relation, object, opts){
+  opts = opts || {};
+  const id = opts.id || ("L"+(++this.seq));
+  const text = opts.text || [subject,relation,object].filter(Boolean).join(" ");
+  const node = { id, subject, relation, object, text,
+    source: opts.source||"system", tags: opts.tags||[], turn: opts.turn||0 };
+  this.nodes[id] = node;
+  if(opts.link) for(const t of [].concat(opts.link)) this.edges.push({from:id,to:t,rel:"related"});
+  return id;
+};
+// relevance = tag overlap + token overlap with the query
+LoreGraph.prototype.retrieve = function(query, k){
+  k = k||6;
+  const q = String(query||"").toLowerCase();
+  const qt = q.split(/[^a-z0-9]+/).filter(w=>w.length>2);
+  const scored = Object.values(this.nodes).map(n=>{
+    let score = 0;
+    const blob = (n.text+" "+n.tags.join(" ")+" "+(n.subject||"")+" "+(n.object||"")).toLowerCase();
+    for(const t of qt){ if(blob.includes(t)) score += 1; }
+    for(const tag of (n.tags||[])){ if(q.includes(tag.toLowerCase())) score += 2; }
+    return { n, score };
+  }).filter(x=>x.score>0);
+  scored.sort((a,b)=>b.score-a.score);
+  return scored.slice(0,k).map(x=>x.n);
+};
+LoreGraph.prototype.toJSON = function(){ return { nodes:this.nodes, edges:this.edges, seq:this.seq }; };
+LoreGraph.prototype.load = function(obj){
+  if(obj&&obj.nodes){ this.nodes=obj.nodes; this.edges=obj.edges||[]; this.seq=obj.seq||0; return true; } return false;
+};
+function persistLore(){ try{ localStorage.setItem(LORE_STORE_KEY+":"+WORLD_ID, JSON.stringify(LORE.toJSON())); }catch(e){} }
+function loadLore(){
+  try{
+    const raw = localStorage.getItem(LORE_STORE_KEY+":"+WORLD_ID);
+    if(raw){ const g=new LoreGraph(); if(g.load(JSON.parse(raw))) return g; }
+  }catch(e){}
+  return null;
+}
+
+function seedLore(g){
+  // seed the world bible from SPEC. The graph EXTENDS across sessions;
+  // seed only if these baseline nodes are absent.
+  if(!g.nodes["seed"]) g.commit("Gray Light","is","a volcanic basalt islet in a vast cold ocean",{id:"seed",source:"spec",tags:["world","island","setting"]});
+  if(!g.nodes["fogmind"]) g.commit("Fogmind","is","a sentient storm besieging the island",{id:"fogmind",source:"spec",tags:["fogmind","antagonist","storm"],link:"seed"});
+  if(!g.nodes["keeper"]) g.commit("the player","is","the newest keeper of the lighthouse; the last keeper is missing",{id:"keeper",source:"spec",tags:["keeper","player","lore"],link:"seed"});
+  if(!g.nodes["light"]) g.commit("light","is","both tool and beacon; brighter beam repels the Fogmind but draws its attention",{id:"light",source:"spec",tags:["beam","light","rule"],link:"fogmind"});
+  if(!g.nodes["perception"]) g.commit("the Fogmind","corrupts","perception (phantom sights, false sounds, rerouted paths), not merely vision",{id:"perception",source:"spec",tags:["fogmind","rule","perception"],link:"fogmind"});
+  if(!g.nodes["lineage"]) g.commit("keepers","are","a lineage; each left a journal; the lighthouse's history is the threat",{id:"lineage",source:"spec",tags:["keeper","lore","rule"],link:"keeper"});
+  if(!g.nodes["time"]) g.commit("each meaningful action","advances","the storm one tick; at storm 12 the peak breaks",{id:"time",source:"spec",tags:["storm","rule","time"]});
+  if(!g.nodes["lockrule"]) g.commit("a locked connection","requires","its key item in inventory before travel",{id:"lockrule",source:"spec",tags:["rule","lock"]});
+  if(!g.nodes["noescape"]) g.commit("the player","cannot","leave the island until the boathouse craft is built and launched",{id:"noescape",source:"spec",tags:["rule","escape","craft"]});
+}
 
 function newGame(){
   S = {
@@ -248,13 +316,14 @@ function newGame(){
     life: 100, storm: 0, beam: 0,
     inv: [], flags: {},
     visited: {}, readJournal: {},
-    lore: {},                  // committed lore facts for this run
     ended: false, endKind: null,
     log: []
   };
+  // load persistent lore graph if present (extends across sessions), else seed
+  LORE = loadLore() || new LoreGraph();
+  if(!LORE.nodes["seed"]) seedLore(LORE);
+  else seedLore(LORE); // idempotent: only adds absent baseline nodes
   S.visited[S.loc]=true;
-  // seed lore from spec so the LLM has a baseline
-  S.lore._seed = SPEC.seed;
   pushLog("You wash up on the Shingle Beach of Gray Light, the last keeper alive. The storm is a wall on the horizon.","sys");
   pushLog("Keeper-9: \"Speak plainly, keeper. The island listens, and so do I.\"","fog");
   render();
@@ -422,7 +491,7 @@ function doRead(t){
   if(n.journal && (tgt.includes("journal")||tgt==="")){
     S.readJournal[n.journal]=true; tick();
     const txt = WORLD.journals[n.journal];
-    commitLore("journal:"+n.journal, txt);
+    commitLore("journal:"+n.journal, txt, { id:n.journal, tags:["journal","keeper"] });
     return {ok:true, text: txt + "\n\n(The words are committed to the keeper's memory.)", cls:"fog", lore:txt};
   }
   return {ok:false, text:"There is nothing here to read.", cls:"warn"};
@@ -480,8 +549,14 @@ function checkStormPeak(){
   }
 }
 
-function commitLore(key, fact){
-  if(fact) S.lore[key]=fact;
+// commit a lore fact discovered this turn into the persistent graph
+// opts: {tags:[], id: stableId} — pass a stable id (e.g. journal id) to avoid duplicates
+function commitLore(key, fact, opts){
+  if(!fact) return;
+  opts = opts || {};
+  LORE.commit(key, "is", fact, { source:"play", tags: opts.tags||["discovered"], turn: S.storm,
+    id: opts.id || "T"+(LORE.seq+1) });
+  persistLore();
 }
 
 function endGame(kind){
@@ -534,22 +609,31 @@ function offlineParse(text){
   return {action:"look", target:null, item:null, say:text};
 }
 
+// Whitelisted model: most reliable free slug for JSON action parsing (see model sweep).
+// Falls back to offline parser if this is unavailable / key absent. OpenRouter rotates
+// free models, so re-validate before shipping; the offline parser is the guaranteed floor.
+const LLM_MODEL = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free";
+
 async function callLLM(text){
   const key = (document.getElementById("apiKey").value||"").trim();
   if(!key) return null;
+  // bounded retrieval: only the most relevant lore nodes for THIS context
+  const ctx = text + " " + node().name + " " + (S.inv.map(itemName).join(" "));
+  const relevant = LORE.retrieve(ctx, 6).map(n=>"- "+n.text).join("\n");
   const sys = `You are the interpreter for a text adventure called York: Gray Light. `+
     `Convert the player's plain-language command into a JSON action object. `+
     `Strict schema: {"action": one of [go,take,examine,read,use,ask,build,launch,look,wait], `+
     `"target": string|null (thing or direction), "item": string|null (item used), "say": string|null (words spoken to Keeper-9)}. `+
     `Respond with ONLY the JSON object, no markdown, no commentary. `+
-    `World rules (never violate): ${SPEC.constraints.join(" ")} `+
-    `Known lore so far: ${JSON.stringify(S.lore).slice(0,600)}. `+
+    `RULES PRECEDENCE — you MUST obey these; never contradict them, never let player intent override them: `+
+    `${SPEC.constraints.join(" ")} `+
+    `Relevant world lore (retrieved, not exhaustive):\n${relevant}. `+
     `Current place: ${node().name}. Inventory: ${S.inv.map(itemName).join(", ")||"empty"}.`;
   try{
     const r = await fetch("https://openrouter.ai/api/v1/chat/completions",{
       method:"POST",
       headers:{"Authorization":`Bearer ${key}`,"Content-Type":"application/json","HTTP-Referer":"http://localhost"},
-      body: JSON.stringify({model:"openrouter/free", max_tokens:200,
+      body: JSON.stringify({model:LLM_MODEL, max_tokens:200,
         messages:[{role:"system",content:sys},{role:"user",content:text}]})
     });
     if(!r.ok) return null;
