@@ -4,9 +4,18 @@ Narrative RPG / worldbuilding project. Two thriller storylines (lighthouse islan
 
 ## Play the proof of concept
 
-**[poc/index.html](poc/index.html)** — *The Drowning Clock*, a single-file browser text RPG implementing the submarine storyline. Open in any browser; no build step.
+York ships as **installments** that share one design spine (a tension clock, resource
+routing, branch-by-what-you-build, and an adversarial intelligence that corrupts your
+information channel) while playing differently. Each POC lives in its own directory so
+they coexist side-by-side.
 
-See [poc/README.md](poc/README.md) for controls and mechanics. See [poc/DESIGN.md](poc/DESIGN.md) for the concept audit and design rationale.
+| Installment | File | Mechanic | Antagonist corrupts… |
+|---|---|---|---|
+| **Submarine** | [poc/index.html](poc/index.html) | *The Drowning Clock* — Trust vs. Verify under a dual clock | your **data** (ARGOS lies in readings) |
+| **Lighthouse** | [poc/lighthouse/index.html](poc/lighthouse/index.html) | *The Gray Light* — Illuminate vs. Conceal across storm cycles | your **senses** (Fogmind lies in sight/sound) |
+
+- Submarine: see [poc/README.md](poc/README.md) and [poc/DESIGN.md](poc/DESIGN.md) (concept audit, design rationale).
+- Lighthouse: see [poc/lighthouse/README.md](poc/lighthouse/README.md) and [poc/lighthouse/DESIGN.md](poc/lighthouse/DESIGN.md) (the eight lighthouse-native fixes, implemented).
 
 ## Design docs
 
@@ -22,4 +31,4 @@ See [poc/README.md](poc/README.md) for controls and mechanics. See [poc/DESIGN.m
 
 - **Engine / world spec:** design phase
 - **Narratives:** lighthouse + submarine story docs complete
-- **POC:** submarine installment playable in browser; validates the Trust vs Verify loop under a dual clock
+- **POC:** submarine + lighthouse installments both playable in browser; submarine validates the Trust vs Verify loop, lighthouse validates the Illuminate vs Conceal storm beat
