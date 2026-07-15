@@ -1,0 +1,15 @@
+{
+  "name": "york",
+  "version": "0.1.0",
+  "private": true,
+  "description": "York — text-adventure POCs. Shared-lore serverless API for the three-tier memory architecture.",
+  "type": "module",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "test:shared-lore": "node scripts/test-shared-lore.mjs",
+    "curate": "node scripts/curate-lore.mjs"
+  },
+  "dependencies": {
+    "@vercel/kv": "^1.0.1"
+  }
+}

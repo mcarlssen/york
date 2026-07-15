@@ -1,0 +1,8 @@
+{
+  "functions": {
+    "api/lore.js": { "maxDuration": 10 }
+  },
+  "rewrites": [
+    { "source": "/api/lore", "destination": "/api/lore.js" }
+  ]
+}

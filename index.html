@@ -1,0 +1,997 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>YORK — The Wreck of the Meridian</title>
+<style>
+  :root{
+    --bg:#06100c; --ink:#7dffb0; --dim:#3f7a5d; --bad:#ff6b6b; --warn:#ffd166;
+    --good:#9bffce; --fog:#9bb7ff; --panel:#0a1812; --line:#16352a; --key:#c08bff;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace;
+    font-size:14px; line-height:1.45;
+    background-image:repeating-linear-gradient(0deg,rgba(125,255,176,.035) 0 1px,transparent 1px 3px);
+  }
+  #app{max-width:1040px;margin:0 auto;padding:14px 16px 30px;min-height:100%}
+  header{border-bottom:1px solid var(--line);padding-bottom:8px;margin-bottom:12px}
+  h1{font-size:18px;margin:0;letter-spacing:2px;text-shadow:0 0 8px rgba(125,255,176,.4)}
+  .sub{color:var(--dim);font-size:12px;margin-top:2px}
+  .grid{display:grid;grid-template-columns:1.5fr .9fr;gap:14px}
+  @media(max-width:780px){.grid{grid-template-columns:1fr}}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px}
+  .panel h2{font-size:12px;letter-spacing:1px;color:var(--dim);margin:0 0 8px;text-transform:uppercase}
+  pre#scene{white-space:pre-wrap;margin:0;min-height:150px}
+  .meters{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px 14px;margin:10px 0}
+  .meter .lab{display:flex;justify-content:space-between;font-size:11px;color:var(--dim)}
+  .bar{height:9px;background:#0c2018;border:1px solid var(--line);border-radius:5px;overflow:hidden}
+  .bar>i{display:block;height:100%}
+  .f-life>i{background:linear-gradient(90deg,#7dffb0,#3f7a5d)}
+  .f-wreck>i{background:linear-gradient(90deg,#ffb86b,#ff6b6b)}
+  .f-signal>i{background:linear-gradient(90deg,#ffd166,#ff9f6b)}
+  .f-warmth>i{background:linear-gradient(90deg,#ff9f6b,#ff6b6b)}
+  .inv{font-size:12px;color:var(--dim);margin-top:6px}
+  .inv b{color:var(--ink)}
+  #log{height:300px;overflow:auto;font-size:13px;padding-right:4px}
+  #log .e{margin:0 0 5px;border-left:2px solid transparent;padding-left:7px}
+  #log .good{border-color:var(--good)}
+  #log .bad{border-color:var(--bad);color:#ffb3b3}
+  #log .warn{border-color:var(--warn);color:#ffe2a3}
+  #log .fog{border-color:var(--fog);color:#c3d2ff}
+  #log .sys{border-color:var(--dim);color:var(--dim)}
+  #log .llm{border-color:var(--key);color:#d9c2ff}
+  #log .you{border-color:#2a4a3a;color:#bfeed4}
+  #input{display:flex;gap:8px;margin-top:12px}
+  #input input{flex:1;background:#0c2018;color:var(--ink);border:1px solid var(--line);
+    border-radius:6px;padding:9px 11px;font:inherit}
+  #input input:focus{outline:none;border-color:var(--ink)}
+  #input button{background:var(--key);color:#1a0f2e;border:none;border-radius:6px;
+    padding:0 16px;font:inherit;font-weight:600;cursor:pointer}
+  #input button:disabled{opacity:.5;cursor:wait}
+  .keys{margin-top:8px;color:var(--dim);font-size:12px}
+  kbd{background:#0c2018;border:1px solid var(--line);border-radius:4px;padding:0 5px}
+  .api{background:#0c1a14;border:1px dashed var(--line);border-radius:6px;padding:10px;margin-bottom:12px;font-size:12.5px;color:#bfeed4}
+  .api input{width:320px;max-width:60%;background:#0c2018;color:var(--ink);border:1px solid var(--line);
+    border-radius:6px;padding:6px 9px;font:inherit;margin-left:6px}
+  .api button{background:var(--ink);color:#06100c;border:none;border-radius:6px;padding:6px 12px;
+    font:inherit;cursor:pointer;margin-left:6px}
+  .api .note{color:var(--dim);margin-top:6px}
+  .sug{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  .sug button{background:#0c2018;color:var(--ink);border:1px solid var(--line);border-radius:14px;
+    padding:4px 10px;font:inherit;font-size:12px;cursor:pointer}
+  .sug button:hover{border-color:var(--ink)}
+  .modal{position:fixed;inset:0;background:rgba(2,8,5,.85);display:flex;align-items:center;justify-content:center;z-index:50}
+  .modal .box{max-width:560px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:20px}
+  .modal h2{color:var(--good)}
+  .modal p{white-space:pre-wrap;line-height:1.6}
+  .modal button{margin-top:14px;background:var(--ink);color:#06100c;border:none;border-radius:6px;padding:8px 16px;font:inherit;cursor:pointer}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>YORK — THE WRECK OF THE MERIDIAN</h1>
+    <div class="sub">a castaway's island · speak in plain language · the engine owns the truth, the voice narrates it</div>
+  </header>
+
+  <div class="api" id="apiBar">
+    <span>OpenRouter key (stored only in this browser):</span>
+    <input id="apiKey" type="password" placeholder="sk-or-..." />
+    <button id="saveKey">Save</button>
+    <div class="note">
+      Uses the <b>openrouter/free</b> router — no cost. Without a key the game still runs via a built-in
+      offline parser. Eventually this moves to a Vercel function so the key never ships to the client.
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="panel">
+      <h2>Island</h2>
+      <pre id="scene"></pre>
+      <div class="meters" id="meters"></div>
+      <div class="inv" id="inv"></div>
+      <div class="sug" id="sug"></div>
+      <div id="input">
+        <input id="cmd" placeholder="what do you do?" />
+        <button id="go">Say</button>
+        <button id="contribute" title="Share this session's discoveries with the wider world (merged, rule-checked)">Contribute</button>
+      </div>
+      <div class="keys">
+        type in plain language · <kbd>Enter</kbd> to act · <kbd>R</kbd> restart ·
+        try <i>look</i>, <i>examine journal</i>, <i>what can I salvage from the wreck?</i>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Keeper's Log</h2>
+      <div id="log"></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="endModal" style="display:none">
+  <div class="box">
+    <h2 id="endTitle"></h2>
+    <p id="endBody"></p>
+    <button id="endAgain">Begin a new watch (R)</button>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+/* ============================================================
+   WORLD DOC — the single source of truth for this world.
+   Mirrors openspec/world/world.json (the authoring source). A POC
+   embeds a copy so it runs from file:// with no fetch/build step.
+   The engine derives WORLD + SPEC from this; seedLore reads lore_seed
+   + ecology from it. Edit world.json to author the world, then
+   re-sync this embed.
+   ============================================================ */
+const WORLD_DOC = {
+  world_id: "meridian",
+  identity: { title:"The Wreck of the Meridian", tagline:"A castaway on a hostile shore. Loot the wreck before the sea takes it — then decide how you leave.", engine:"index.html" },
+  constraints: [
+    "Ecology is self-consistent with an equatorial castaway island: reef, palms, mangroves, feral goats, seabirds, jungle cats, parrots, sharks. No cold/temperate or volcanic life.",
+    "SIGNAL vs CONCEAL: a signal (fire/pyre/light) raises rescue chance AND predator/wildlife attention; brighter signal = more of both. Staying dark and quiet is safe but unseen.",
+    "Wildlife is the antagonist: sharks in the water, night predators on land, storms at sea. The jungle cat and parrot can be tamed and turned to the player's use.",
+    "THE WRECK'S CLOCK: wreck integrity falls every turn (tide and weather). At 0 the wreck breaks up and its un-salvaged items are lost forever.",
+    "NIGHT falls on a cycle; warmth falls each night and is restored by fire or shelter. At warmth 0, life falls.",
+    "Each meaningful action advances the tide/clock one tick.",
+    "A locked connection or container requires its key item in inventory before it opens.",
+    "The player cannot leave the open ocean until a craft (raft or balloon) is built and launched, or until a rescue is triggered by signal.",
+    "Man Friday is omitted; the companion is a tamed jungle cat (hunting/scouting) and/or a tamed parrot (warning/messenger)."
+  ],
+  lore_seed: [
+    { id:"seed",  subject:"the Meridian", relation:"is", object:"a merchant brig wrecked on a reef off an uninhabited equatorial island", tags:["world","wreck","setting"] },
+    { id:"you",   subject:"the player", relation:"is", object:"the sole survivor of the Meridian, washed ashore with nothing", tags:["player","survivor","lore"] },
+    { id:"island",subject:"the island", relation:"is", object:"a forested equatorial island with a reef, a jungle, a freshwater spring, and a high cliff", tags:["island","setting","ecology"] },
+    { id:"wreckclock", subject:"the wreck", relation:"has", object:"an integrity that falls each turn; at 0 it is gone and its cargo lost", tags:["wreck","rule","clock"] },
+    { id:"signal",subject:"a signal", relation:"draws", object:"both rescue (ships/planes) and predators (sharks, night hunters)", tags:["signal","rule","conceal"] },
+    { id:"warmth",subject:"night", relation:"drains", object:"warmth; fire or shelter restores it; at 0 warmth, life falls", tags:["night","warmth","rule"] },
+    { id:"cat",   subject:"a jungle cat", relation:"is", object:"a wild predator that can be tamed with food; once tamed it hunts and scouts", tags:["cat","companion","wildlife"] },
+    { id:"parrot",subject:"a parrot", relation:"is", object:"a wild bird that can be tamed; once tamed it warns of ships and predators", tags:["parrot","companion","wildlife"] },
+    { id:"paths", subject:"escape", relation:"may_be", object:"by raft, by hot-air balloon, by signal rescue, or by enduring on the island", tags:["escape","ending","rule"] }
+  ],
+  ecology: {
+    climate:"hot, humid, trade-wind, violent squalls",
+    terrain:["reef","shingle beach","mangrove flat","jungle interior","freshwater spring","basalt cliff"],
+    flora:["coconut palm","mangrove","breadfruit","wild fig","bamboo"],
+    fauna:["feral goat","jungle cat","parrot","crab","reef fish","seabird","shark"]
+  },
+  companions: {
+    cat:    { name:"the jungle cat", home:"jungle", tame_item:"goat_meat" },
+    parrot: { name:"the parrot", home:"cliff", tame_item:"fig" }
+  },
+  map: {
+    start:"beach", max_clock:16,
+    nodes: {
+      beach:      { name:"Shingle Beach", desc:"Where the sea spat you out. The Meridian lies broken on the reef, a hundred yards out. The jungle waits inland; the cove and your camp sit along the shore.", exits:{ west:"tide_pools", north:"jungle", east:"wreck_shore", up:"cliff", south:"cove", south_east:"camp" } },
+      wreck_shore:{ name:"Wreck Shore", desc:"At low light you can wade toward the Meridian's hull. She is breaking up fast.", exits:{ west:"beach" }, salvage:true },
+      tide_pools: { name:"Tide Pools", desc:"Rock pools thick with crabs and shellfish; a seep of fresh water filters down.", exits:{ east:"beach" }, items:["crab","fresh_water"], forage:"food" },
+      jungle:     { name:"Jungle Interior", desc:"Close, green, loud with birds. Feral goats browse; something with yellow eyes watches from the figs.", exits:{ south:"beach", east:"spring", north:"cliff" }, items:["goat_meat","fig","bamboo"], cat_home:true },
+      spring:     { name:"Freshwater Spring", desc:"Cold sweet water wells from the rock. Life, here.", exits:{ west:"jungle" }, items:["fresh_water"], forage:"water" },
+      cliff:      { name:"The Cliff", desc:"A high bare promontory. From here you can see the whole reef — and be seen. A dead tree waits for a pyre.", exits:{ south:"jungle", down:"beach" }, build:"pyre", parrot_home:true },
+      cove:       { name:"Sheltered Cove", desc:"Calm water between two headlands. The place to build and launch a craft.", exits:{ south:"beach" }, build:"raft" },
+      camp:       { name:"Your Camp", desc:"A lean-to of palms and sailcloth you raised. Safe at night if the fire holds.", exits:{ south:"beach" }, build:"shelter" }
+    },
+    containers: {
+      wreck: { name:"The Meridian (wreck)", holds:{ tools:"a hatchet, a knife, rope", sailcloth:"canvas from the fallen sail", provisions:"hardtack, a jar of rum", rifle:"a sodden musket and shot", radio:"a waterproof wireless set" } }
+    },
+    items: {
+      tools:{name:"tools", desc:"hatchet, knife, rope — the means to build."},
+      sailcloth:{name:"sailcloth", desc:"canvas; shelters, sails, balloon envelope."},
+      provisions:{name:"provisions", desc:"hardtack and a jar of rum; staves off starvation, briefly."},
+      rifle:{name:"musket", desc:"sodden but serviceable; a noise that scares predators, a tool to hunt."},
+      radio:{name:"waterproof radio", desc:"a wireless set — if you can power and tune it, someone may answer."},
+      crab:{name:"crab", desc:"a tide-pool crab; food."},
+      goat_meat:{name:"goat meat", desc:"feral goat; real sustenance."},
+      fig:{name:"fig", desc:"wild fig; food and water."},
+      bamboo:{name:"bamboo", desc:"strong, light; raft and frame material."},
+      fresh_water:{name:"fresh water", desc:"the difference between life and the sun."}
+    }
+  }
+};
+
+/* Derive the engine's WORLD + SPEC from the world doc. */
+function buildWorld(doc){
+  return {
+    start: doc.map.start,
+    maxClock: doc.map.max_clock,
+    nodes: doc.map.nodes,
+    containers: doc.map.containers,
+    items: doc.map.items,
+    companions: doc.companions
+  };
+}
+const WORLD = buildWorld(WORLD_DOC);
+const SPEC = {
+  seed: (WORLD_DOC.identity.title+": "+WORLD_DOC.identity.tagline),
+  constraints: WORLD_DOC.constraints
+};
+
+/* ============================================================
+   DETERMINISTIC ENGINE — the spine (derived from WORLD_DOC).
+   Map graph, inventory, life/storm/beam meters, locks, journals,
+   puzzles, win/lose. The LLM never changes this directly.
+   ============================================================ */
+
+const ENDINGS = {
+  rescue_ship: ["A SAIL ON THE HORIZON", "good",
+    "Smoke and mirror-flame do their work. A sail heaves up over the reef, and a boat comes for you. The Meridian took everything; the island gave you just enough. You leave the gray behind."],
+  raft_escape: ["THE OPEN OCEAN", "good",
+    "The raft slides off the cove into the blue. You ship the bamboo outrigger and point her west, away from the reef. Whether anyone finds you, you have chosen the sea over the island."],
+  balloon: ["INTO THE CLOUDS", "bittersweet",
+    "The envelope fills; the world tilts and shrinks beneath you. You rise above the squalls, free and alone, a castaway of the sky now. The island becomes a green speck and is gone."],
+  endure: ["THE ISLAND IS HOME", "bittersweet",
+    "The clock runs out and still you stand — shelter roofed, fire banked, the cat at your feet, the parrot on your shoulder. You came ashore with nothing. You are a person of this place now."],
+  perish: ["THE SEA KEEPS YOU", "bad",
+    "Your strength gives out on the sand. The wreck is gone, the fire is cold, and the island does not miss you. The tide comes, as it always does."]
+};
+
+let S = null;
+let LORE = null;          // persistent LoreGraph, loaded from storage or seeded
+
+/* ============================================================
+   LORE GRAPH — bounded, queryable world memory.
+   Facts are nodes {id,subject,relation,object,text,source,tags,turn};
+   related facts are linked by edges. Retrieval returns only the
+   top-K most relevant nodes for the current context, so the LLM
+   prompt never bloats. Persisted per world id across sessions.
+   ============================================================ */
+const LORE_STORE_KEY = "york_lore_v1";
+const WORLD_ID = "meridian";
+
+function LoreGraph(){
+  this.nodes = {};        // id -> node
+  this.edges = [];        // {from,to,rel}
+  this.seq = 0;
+}
+LoreGraph.prototype.commit = function(subject, relation, object, opts){
+  opts = opts || {};
+  const id = opts.id || ("L"+(++this.seq));
+  const text = opts.text || [subject,relation,object].filter(Boolean).join(" ");
+  const node = { id, subject, relation, object, text,
+    source: opts.source||"system", tags: opts.tags||[], turn: opts.turn||0 };
+  this.nodes[id] = node;
+  if(opts.link) for(const t of [].concat(opts.link)) this.edges.push({from:id,to:t,rel:"related"});
+  return id;
+};
+// relevance = tag overlap + token overlap with the query
+LoreGraph.prototype.retrieve = function(query, k){
+  k = k||6;
+  const q = String(query||"").toLowerCase();
+  const qt = q.split(/[^a-z0-9]+/).filter(w=>w.length>2);
+  const scored = Object.values(this.nodes).map(n=>{
+    let score = 0;
+    const blob = (n.text+" "+n.tags.join(" ")+" "+(n.subject||"")+" "+(n.object||"")).toLowerCase();
+    for(const t of qt){ if(blob.includes(t)) score += 1; }
+    for(const tag of (n.tags||[])){ if(q.includes(tag.toLowerCase())) score += 2; }
+    return { n, score };
+  }).filter(x=>x.score>0);
+  scored.sort((a,b)=>b.score-a.score);
+  return scored.slice(0,k).map(x=>x.n);
+};
+LoreGraph.prototype.toJSON = function(){ return { nodes:this.nodes, edges:this.edges, seq:this.seq }; };
+LoreGraph.prototype.load = function(obj){
+  if(obj&&obj.nodes){ this.nodes=obj.nodes; this.edges=obj.edges||[]; this.seq=obj.seq||0; return true; } return false;
+};
+function persistLore(){ try{ localStorage.setItem(LORE_STORE_KEY+":"+WORLD_ID, JSON.stringify(LORE.toJSON())); }catch(e){} }
+function loadLore(){
+  try{
+    const raw = localStorage.getItem(LORE_STORE_KEY+":"+WORLD_ID);
+    if(raw){ const g=new LoreGraph(); if(g.load(JSON.parse(raw))) return g; }
+  }catch(e){}
+  return null;
+}
+
+function seedLore(g, doc){
+  doc = doc || WORLD_DOC;
+  // baseline lore_seed facts (idempotent by id)
+  for(const e of (doc.lore_seed||[])){
+    if(!g.nodes[e.id]) g.commit(e.subject, e.relation, e.object, { id:e.id, source:"spec", tags:e.tags||[], link:e.link });
+  }
+  // ecology becomes retrievable lore so the LLM answers environment questions consistently
+  const eco = doc.ecology || {};
+  if(eco.climate && !g.nodes["eco_climate"]) g.commit("the climate","is",eco.climate,{id:"eco_climate",source:"spec",tags:["ecology","climate"]});
+  for(const t of (eco.terrain||[])) if(!g.nodes["eco_terr_"+t]) g.commit("terrain includes", t, "", {id:"eco_terr_"+t,source:"spec",tags:["ecology","terrain",t.toLowerCase().replace(/[^a-z]/g,"")]});
+  for(const f of (eco.flora||[]))    if(!g.nodes["eco_flora_"+f]) g.commit("flora includes", f, "", {id:"eco_flora_"+f,source:"spec",tags:["ecology","flora",f.toLowerCase().replace(/[^a-z]/g,"")]});
+  for(const fa of (eco.fauna||[]))   if(!g.nodes["eco_fauna_"+fa]) g.commit("fauna includes", fa, "", {id:"eco_fauna_"+fa,source:"spec",tags:["ecology","fauna",fa.toLowerCase().replace(/[^a-z]/g,"")]});
+}
+
+/* ============================================================
+   SHARED MEMORY — three tiers, rules precedence preserved.
+   LOCAL (localStorage) is this player's private, organic play.
+   SHARED (server KV via /api/lore) is merged, rule-validated lore
+   from all players; new players bootstrap from it. CANONICAL
+   (world.json in repo) is curated by a human; the LLM/players
+   never write it. Only the curator promotes vetted shared facts.
+   Push/pull are best-effort; the offline floor is unchanged.
+   ============================================================ */
+const API_BASE = (typeof window!=="undefined" && window.YORK_API_BASE) || "/api";
+
+// Player-generated nodes worth sharing: those the engine created at play
+// (source "play" or "generated"), excluding spec-seeded baseline facts.
+function collectContributions(){
+  const out = [];
+  for(const n of Object.values(LORE.nodes)){
+    if(n.source==="play" || n.source==="generated" || (n.tags&&n.tags.includes("generated"))){
+      out.push({ id:n.id, subject:n.subject, relation:n.relation, object:n.object,
+                 text:n.text, tags:n.tags||[], source:n.source, world:WORLD_ID });
+    }
+  }
+  return out;
+}
+
+// Client-side pre-filter for an obviously rule-breaking fact (mirrors server).
+// Returns null if acceptable, or a reason string if it must be dropped.
+function validateFactClient(text){
+  const t = String(text||"").toLowerCase();
+  // world-specific escape rule is enforced server-side against live state; here we
+  // only block content that contradicts the static ecology/identity constraints.
+  if(/jungle|palm tree|tropical|coral reef|equator|magic portal|dragon|unicorn/.test(t))
+    return "contradicts the world's ecology/identity constraints";
+  return null;
+}
+
+async function pushLore(){
+  const nodes = collectContributions();
+  if(!nodes.length) return { ok:true, pushed:0, skipped:0, note:"nothing new to share" };
+  // client pre-filter
+  let pushed=0, skipped=0;
+  const clean = nodes.filter(n=>{
+    const why = validateFactClient(n.text);
+    if(why){ skipped++; return false; }
+    pushed++; return true;
+  });
+  try{
+    const r = await fetch(API_BASE+"/lore",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({ world:WORLD_ID, nodes:clean })
+    });
+    if(!r.ok) return { ok:false, pushed:0, skipped, why:"server rejected ("+r.status+")" };
+    const d = await r.json().catch(()=>({}));
+    return { ok:true, pushed: pushed, skipped: skipped, merged: d.merged||pushed, note:d.note||"" };
+  }catch(e){ return { ok:false, pushed:0, skipped, why:"network error (offline floor intact)" }; }
+}
+
+async function pullLore(){
+  try{
+    const r = await fetch(API_BASE+"/lore?world="+encodeURIComponent(WORLD_ID));
+    if(!r.ok) return { ok:false, why:"server unavailable (using local + spec seed)" };
+    const d = await r.json().catch(()=>({}));
+    const shared = (d&&d.nodes)||[];
+    let added=0;
+    for(const n of shared){
+      // never overwrite a node the player already has (local precedence)
+      if(LORE.nodes[n.id]) continue;
+      LORE.commit(n.subject, n.relation, n.object,
+        { id:n.id, source:n.source||"shared", tags:(n.tags||[]).concat("shared"), turn:n.turn||0 });
+      added++;
+    }
+    if(added) persistLore();
+    return { ok:true, added };
+  }catch(e){ return { ok:false, why:"network error (using local + spec seed)" }; }
+}
+
+// Contribute action: push this session's discoveries to the shared world.
+async function contribute(){
+  pushLog("You offer what you've learned to the wider world…","sys");
+  const r = await pushLore();
+  if(r.ok) pushLog(`Shared ${r.pushed} discovery(ies) with the world.${r.skipped?(" ("+r.skipped+" skipped as off-rules)"):""}${r.note?(" "+r.note):""}`,"good");
+  else pushLog("Could not share just now: "+r.why+". Your local memory is safe.","warn");
+  render();
+}
+
+function newGame(){
+  S = {
+    loc: WORLD.start,
+    life: 100, warmth: 100, signal: 0, clock: 0,
+    wreck: 100,                  // the Wreck's Clock
+    night: false,
+    inv: [], flags: {}, tame: { cat:0, parrot:0 },
+    salvaged: {},
+    visited: {},
+    ended: false, endKind: null,
+    log: []
+  };
+  // load persistent lore graph if present (extends across sessions), else seed
+  LORE = loadLore() || new LoreGraph();
+  seedLore(LORE, WORLD_DOC); // idempotent: only adds absent baseline nodes
+  S.visited[S.loc]=true;
+  pushLog("The Meridian is kindling on the reef. You crawl ashore on the Shingle Beach, the only soul left of her.","sys");
+  pushLog("The wreck will not last the day. Salvage what you can — then decide how you leave this place.","sys");
+  // bootstrap from the SHARED world (best-effort; offline floor = local + spec seed).
+  // fire-and-forget: graph enriches as it arrives; persisted for next session.
+  pullLore().then(r=>{
+    if(r.ok && r.added>0){
+      pushLog(`The wider world remembers ${r.added} thing(s) others learned here.`,"fog");
+      render();
+    }
+  });
+  render();
+}
+
+function pushLog(t,cls){ S.log.push({t:String(t),c:cls||""}); }
+
+/* ---- deterministic spatial + state helpers (used by engine AND LLM validation) ---- */
+function node(){ return WORLD.nodes[S.loc]; }
+function dirToNode(dir){
+  const e = node().exits || {};
+  return e[dir] || null;
+}
+function canTravel(dir){
+  const n = node();
+  if(n.lock && n.lock.dir===dir){
+    return { ok: S.inv.includes(n.lock.key), need:n.lock.key, text:n.lock.lockedText };
+  }
+  return { ok: !!dirToNode(dir) };
+}
+function hasItem(id){ return S.inv.includes(id); }
+function itemName(id){ return (WORLD.items[id]&&WORLD.items[id].name)||id; }
+
+/* ---- resolve a natural-language direction/target to an exit key ---- */
+function normalizeDir(t, exitKeys){
+  if(!t) return null;
+  let s = String(t).toLowerCase().trim();
+  s = s.replace(/^(to |the |a |an |into |towards |through |up |down |in |out |at )+/g,"").trim();
+  const dirs = ["north_east","south_east","south_west","north_west","north","south","east","west","up","down","in","out",
+                "northeast","southeast","southwest","northwest"];
+  for(const d of dirs){
+    const plain = d.replace("_"," ");
+    if(s===d || s===plain || s.startsWith(d) || s.startsWith(plain) ||
+       new RegExp("\\b"+plain.replace(/ /g,"\\s*")+"\\b").test(s))
+      return d==="northeast"?"north_east":d==="southeast"?"south_east":d==="southwest"?"south_west":d==="northwest"?"north_west":d;
+  }
+  // destination name match
+  for(const ek of exitKeys){
+    const name = WORLD.nodes[node().exits[ek]].name.toLowerCase();
+    const first = name.split(" ")[0];
+    if(name.replace(/ /g,"").includes(s.replace(/ /g,"")) || s.includes(first)) return ek;
+  }
+  // aliases
+  const alias = {tower:"north", cellar:"in", base:"south", lighthouse:"north", crypt:"down",
+                 chapel:"west", beach:"south", boathouse:"south_west"};
+  for(const k in alias){ if(s.includes(k)){ const d=alias[k]; if(exitKeys.includes(d)) return d; } }
+  return null;
+}
+
+/* ---- the only ways state changes: apply an already-validated action ---- */
+function applyAction(a){
+  switch(a.action){
+    case "look": return describe();
+    case "examine": return doExamine(a.target);
+    case "go": return doGo(a.target);
+    case "take": return doTake(a.target);
+    case "salvage": return doSalvage(a.target);
+    case "use": return doUse(a.target, a.item);
+    case "build": return doBuild(a.target);
+    case "signal": return doSignal(a.target);
+    case "tame": return doTame(a.target);
+    case "launch": return doLaunch();
+    case "ask": return doAsk(a.target, a.say);
+    case "eat": return doEat(a.target);
+    case "contribute": return { ok:true, async:true, run:contribute };
+    case "wait": return doWait();
+    default: return {ok:false, text:"The island does not record that action."};
+  }
+}
+
+function tick(){ S.clock = Math.min(WORLD.maxClock, S.clock+1); }
+function lifeDelta(d){ S.life = Math.max(0, Math.min(100, S.life+d)); }
+function warmthDelta(d){ S.warmth = Math.max(0, Math.min(100, S.warmth+d)); }
+function signalDelta(d){ S.signal = Math.max(0, Math.min(10, S.signal+d)); }
+function tameDelta(which,d){ S.tame[which]=Math.max(0,Math.min(10,S.tame[which]+d)); }
+
+function describe(){
+  const n = node();
+  let txt = `— ${n.name} —\n${n.desc}`;
+  const exits = Object.keys(n.exits||{});
+  if(exits.length) txt += `\n\nPaths: ${exits.join(", ")}.`;
+  const here = (n.items||[]).filter(i=>!hasItem(i));
+  if(here.length) txt += `\nYou can see: ${here.map(itemName).join(", ")}.`;
+  if(n.salvage) txt += `\nThe Meridian groans on the reef (integrity ${S.wreck}). Salvage a cargo: tools, sailcloth, provisions, rifle, radio.`;
+  if(n.build) txt += `\nYou could build here (${n.build}).`;
+  if(n.cat_home && !S.tame.cat) txt += `\nA jungle cat watches from the green. (tame it with goat meat)`;
+  if(n.parrot_home && !S.tame.parrot) txt += `\nA parrot cocks its head. (tame it with a fig)`;
+  return {ok:true, text:txt, cls:"good"};
+}
+
+function doExamine(t){
+  if(!t) return {ok:false,text:"Examine what?"};
+  const tgt = String(t).toLowerCase();
+  const n = node();
+  const itemHere = matchItem((n.items||[]), tgt);
+  if(itemHere) return {ok:true, text:WORLD.items[itemHere].desc, cls:"good"};
+  const itemInv = S.inv.find(i=>i===tgt.replace(/_/g," ")||itemName(i).toLowerCase()===tgt.replace(/_/g," ")||itemName(i).toLowerCase().includes(tgt));
+  if(itemInv) return {ok:true, text:WORLD.items[itemInv].desc, cls:"good"};
+  if(tgt.length>2 && !/here|room|place|around|surroundings/.test(tgt)){
+    return {ok:true, text:`You study ${t}.`, cls:"good", pendingGen:{type:"lore", query:"Describe "+t+" on the Meridian's island, an equatorial castaway isle with reef, jungle, goats, cats, parrots, sharks."}};
+  }
+  return {ok:true, text:`You study ${t}. ${n.desc}`, cls:"good"};
+}
+
+function doGo(t){
+  if(!t) return {ok:false, text:"Go where?"};
+  const dir = normalizeDir(t, Object.keys(node().exits||{}));
+  if(!dir) return {ok:false, text:"There is no such way from here.", cls:"warn"};
+  const chk = canTravel(dir);
+  if(!chk.ok){
+    return {ok:false, text:(chk.text||"That way is blocked."), cls:"warn"};
+  }
+  const dest = dirToNode(dir);
+  S.loc = dest; S.visited[dest]=true; tick();
+  // wreck salvage adjacency: being at wreck_shore ages the wreck faster
+  if(dest==="wreck_shore") ageWreck(4); else ageWreck(2);
+  const r = describe();
+  checkEnd();
+  return r;
+}
+
+function matchItem(here, tgt){
+  const t=String(tgt).toLowerCase().replace(/_/g," ").trim();
+  return here.find(i=>!hasItem(i) && (i===t || itemName(i).toLowerCase()===t || itemName(i).toLowerCase().includes(t) || i.includes(t.replace(/ /g,"_"))));
+}
+function doTake(t){
+  if(!t) return {ok:false, text:"Take what?"};
+  const n=node();
+  const it=matchItem((n.items||[]), t);
+  if(!it) return {ok:false, text:`There is no ${t} here to take.`, cls:"warn"};
+  S.inv.push(it); tick(); ageWreck(1);
+  return {ok:true, text:`You take the ${itemName(it)}.`, cls:"good"};
+}
+
+// The Wreck's Clock: salvage pulls one cargo category; wreck integrity falls each turn.
+function doSalvage(t){
+  if(S.loc!=="wreck_shore") return {ok:false, text:"You must be at the Wreck Shore to salvage the Meridian.", cls:"warn"};
+  if(S.wreck<=0) return {ok:false, text:"The Meridian has broken up and sunk. Her cargo is lost to the reef.", cls:"warn"};
+  const cat = (t||"").toLowerCase();
+  const holds = WORLD.containers.wreck.holds;
+  const key = Object.keys(holds).find(k=> k===cat || holds[k].toLowerCase().includes(cat) || cat.includes(k));
+  if(!key) return {ok:false, text:"Salvage what? (tools, sailcloth, provisions, rifle, radio)", cls:"warn"};
+  if(S.salvaged[key]) return {ok:false, text:`You already stripped the ${key} from the wreck.`, cls:"warn"};
+  S.inv.push(key); S.salvaged[key]=true; tick(); ageWreck(3);
+  let txt = `You wrest ${holds[key]} from the dying hull.`;
+  if(key==="radio") txt += " The wireless is sealed in oilskin — it might still work.";
+  if(S.wreck<=0) txt += " Even as you climb clear, the Meridian comes apart behind you.";
+  return {ok:true, text:txt, cls:"good"};
+}
+
+function ageWreck(d){
+  if(S.wreck<=0) return;
+  S.wreck = Math.max(0, S.wreck - d);
+  if(S.wreck===0){ pushLog("The Meridian breaks her back on the reef and is gone. Anything not yet salvaged is lost.","bad"); }
+}
+
+function doUse(t, item){
+  const tgt=String(t||"").toLowerCase();
+  // eat/drink handled by doEat; here handle tool use
+  if(tgt.includes("rifle") && hasItem("rifle")){
+    return {ok:true, text:"You level the musket. The report sends the wildlife bolting — and warns the sharks you are here. (useful to hunt or scare, but loud)", cls:"warn", lore:"The musket's report scares predators but draws the sea's attention."};
+  }
+  if(tgt.includes("radio") && hasItem("radio")){
+    return {ok:true, text:"You key the wireless. Static, then a voice through the storm: \"...any survivor, this is the trading schooner *Avis*... we hold offshore at the reef...\" — if you raise a signal, they will come.", cls:"fog", lore:"The wireless reaches the schooner Avis, holding offshore; a signal will bring rescue."};
+  }
+  return {ok:false, text:"You can't use that here. (try: salvage, build, signal, tame, eat)", cls:"warn"};
+}
+
+function doRead(t){
+  // no journals in this world; reading the landscape is doExamine. Keep for LLM parity.
+  return {ok:false, text:"There is no writing here to read — only the island, and what it chooses to show you.", cls:"warn"};
+}
+
+function doAsk(t, say){
+  const tgt=String(t||"").toLowerCase();
+  if(say && /cat|parrot|companion|animal|tame/.test(say)){
+    return {ok:true, text:`The cat, if tamed, hunts and scouts. The parrot, if tamed, warns of ships and predators. Feed them (goat meat / fig) where they live to win them.`, cls:"fog"};
+  }
+  if(say && /signal|fire|rescue|ship|escape/.test(say)){
+    return {ok:true, text:`A signal fire on the cliff draws rescue — and predators. Bright signal, more of both. Build a pyre there, or tune the radio if you salvaged it.`, cls:"fog"};
+  }
+  if(say && /wreck|meridian|salvage/.test(say)){
+    return {ok:true, text:`The Meridian is breaking up on the reef. Her cargo — tools, sailcloth, provisions, a musket, a wireless — is yours if you take it before the sea does.`, cls:"fog"};
+  }
+  if(say && (say.match(/\?$/)||/what|who|why|how|where|describe|ecology|animal|plant|bird|creature|history/.test(say))){
+    return {ok:true, text:`You put the question to the island.`, cls:"fog", pendingGen:{type:"lore", query:say}};
+  }
+  return {ok:true, text:`You speak to the wind. Something in the palms listens, and remembers your voice.`, cls:"fog"};
+}
+
+function doBuild(t){
+  const what = (t||"").toLowerCase();
+  const n = node();
+  if(!n.build) return {ok:false, text:"There is nothing to build here.", cls:"warn"};
+  if(n.build!==what && !["raft","pyre","shelter","balloon"].includes(what)) 
+    return {ok:false, text:`Here you can build: ${n.build}.`, cls:"warn"};
+  if(what==="raft"){
+    if(S.flags.raftBuilt) return {ok:true, text:"The raft is already built. Launch it.", cls:"good"};
+    if(!hasItem("tools")||!hasItem("sailcloth")||!hasItem("bamboo"))
+      return {ok:false, text:"A raft needs tools, sailcloth, and bamboo.", cls:"warn"};
+    S.flags.raftBuilt=true; tick();
+    return {ok:true, text:"You lash bamboo into an outrigger and rig the sailcloth. A sea-worthy raft. (launch it to leave)", cls:"good"};
+  }
+  if(what==="pyre"){
+    if(S.flags.pyreBuilt) return {ok:true, text:"The pyre stands ready on the cliff. Feed it to signal.", cls:"good"};
+    if(!hasItem("tools")&&!hasItem("bamboo")) return {ok:false, text:"You need tools or bamboo to raise a pyre.", cls:"warn"};
+    S.flags.pyreBuilt=true; tick();
+    return {ok:true, text:"You stack bamboo and driftwood into a pyre on the cliff, ready to light.", cls:"good"};
+  }
+  if(what==="shelter"){
+    if(S.flags.shelterBuilt) return {ok:true, text:"Your camp is already standing.", cls:"good"};
+    if(!hasItem("tools")&&!hasItem("sailcloth")) return {ok:false, text:"A shelter needs tools or sailcloth.", cls:"warn"};
+    S.flags.shelterBuilt=true; tick();
+    return {ok:true, text:"You raise a lean-to of palms and sailcloth. A roof against the squall, a hearth within.", cls:"good"};
+  }
+  if(what==="balloon"){
+    if(S.flags.balloonBuilt) return {ok:true, text:"The balloon envelope is already sewn. Launch it.", cls:"good"};
+    if(!hasItem("sailcloth")||!hasItem("tools")) return {ok:false, text:"A balloon needs sailcloth and tools.", cls:"warn"};
+    S.flags.balloonBuilt=true; tick();
+    return {ok:true, text:"You sew the sailcloth into an envelope and cage it with bamboo. Mad, but it might fly. (launch it to leave)", cls:"bittersweet"};
+  }
+  return {ok:false, text:"You can't build that here.", cls:"warn"};
+}
+
+function doSignal(t){
+  if(!S.flags.pyreBuilt) return {ok:false, text:"You need a pyre on the cliff before you can signal. (build pyre)", cls:"warn"};
+  if(S.loc!=="cliff") return {ok:false, text:"The pyre is on the cliff. Go there to feed it.", cls:"warn"};
+  signalDelta(3); warmthDelta(2); tick();
+  let txt="You feed the pyre; smoke and flame climb into the blue. Signal +3 — rescue may see it. So may the sharks and the things that hunt at night.";
+  // a high signal with a way to be heard/seen can trigger rescue
+  if(S.signal>=8 && (hasItem("radio")||S.tame.parrot>=5)){
+    pushLog("Smoke on the horizon resolves into a sail — the schooner *Avis* answers your signal.","good");
+    endGame("rescue_ship");
+  }
+  return {ok:true, text:txt, cls:"warn"};
+}
+
+function doTame(t){
+  const which = (t||"").toLowerCase().includes("parrot") ? "parrot" : (t||"").toLowerCase().includes("cat") ? "cat" : null;
+  if(!which) return {ok:false, text:"Tame what? (the cat, the parrot)", cls:"warn"};
+  const c = WORLD.companions[which];
+  if(S.loc!==c.home) return {ok:false, text:`The ${which} is not here. It lives at the ${c.home}.`, cls:"warn"};
+  if(S.tame[which]>=10) return {ok:true, text:`The ${which} is already yours.`, cls:"good"};
+  if(!hasItem(c.tame_item)) return {ok:false, text:`You need ${c.tame_item} to tame the ${which}.`, cls:"warn"};
+  // consume one unit of the tame item
+  const i=S.inv.indexOf(c.tame_item); if(i>=0) S.inv.splice(i,1);
+  tameDelta(which, 10); tick();
+  const name = which==="cat" ? "The jungle cat" : "The parrot";
+  return {ok:true, text:`You offer the ${c.tame_item}. ${name} settles, decides you are not prey. It is yours now — and useful.`, cls:"good"};
+}
+
+function doLaunch(){
+  if(S.flags.raftBuilt){ endGame("raft_escape"); return {ok:true,text:""}; }
+  if(S.flags.balloonBuilt){ endGame("balloon"); return {ok:true,text:""}; }
+  return {ok:false, text:"You have no craft to launch. (build raft / balloon)", cls:"warn"};
+}
+
+function doEat(t){
+  const tgt=String(t||"").toLowerCase();
+  const food = ["crab","goat_meat","fig","provisions","fresh_water"].find(f=> tgt.includes(f) || (WORLD.items[f]&&WORLD.items[f].name.toLowerCase().includes(tgt)));
+  if(!food) return {ok:false, text:"You have nothing like that to eat or drink.", cls:"warn"};
+  const i=S.inv.indexOf(food); if(i<0 && !["fresh_water"].includes(food)) return {ok:false, text:`You don't have ${food}.`, cls:"warn"};
+  if(i>=0) S.inv.splice(i,1);
+  lifeDelta(food==="fresh_water"?8:14); tick(); ageWreck(0);
+  return {ok:true, text:`You eat/drink the ${WORLD.items[food].name}. Life restored.`, cls:"good"};
+}
+
+function doWait(){
+  tick(); ageWreck(2);
+  // night cycle: warmth falls, mitigated by shelter/fire
+  S.night = !S.night;
+  if(S.night){
+    const mit = (S.flags.shelterBuilt?30:0) + (S.flags.pyreBuilt&&S.signal>0?20:0);
+    const drop = Math.max(0, 25 - mit);
+    warmthDelta(-drop); lifeDelta(-3);
+    let txt=`Night falls. Warmth -${drop}, life -3.`;
+    if(S.warmth<=0) txt += " The cold bites deep.";
+    checkEnd();
+    return {ok:true, text:txt, cls:"warn"};
+  }
+  return {ok:true, text:"You rest through the heat of the day. The clock advances; the wreck ages.", cls:"warn"};
+}
+
+/* ---- win / lose ---- */
+function checkEnd(){
+  if(S.ended) return;
+  if(S.life<=0){ endGame("perish"); return; }
+  if(S.warmth<=0){ lifeDelta(-8); if(S.life<=0){ endGame("perish"); return; } }
+  if(S.clock>=WORLD.maxClock){
+    // survived to the end of the clock
+    if(S.flags.shelterBuilt && S.life>0) endGame("endure");
+    else if(S.signal>=8 && (hasItem("radio")||S.tame.parrot>=5)) endGame("rescue_ship");
+    else endGame("perish");
+  }
+}
+
+// commit a lore fact discovered this turn into the persistent graph
+// opts: {tags:[], id: stableId} — pass a stable id (e.g. journal id) to avoid duplicates
+function commitLore(key, fact, opts){
+  if(!fact) return;
+  opts = opts || {};
+  LORE.commit(key, "is", fact, { source:"play", tags: opts.tags||["discovered"], turn: S.clock,
+    id: opts.id || "T"+(LORE.seq+1) });
+  persistLore();
+}
+
+function endGame(kind){
+  S.ended=true; S.endKind=kind;
+  const e=ENDINGS[kind];
+  pushLog(e[2], e[1]);
+  render();
+  showEnd(e[0], e[2], e[1]);
+}
+
+/* ============================================================
+   LLM LAYER — interpret plain language into an action JSON,
+   then validate against the deterministic engine. Offline
+   regex fallback when no key / call fails (the spine always works).
+   ============================================================ */
+const ACTION_VERB = {
+  go:["go","walk","move","head","climb","enter","run","travel","south","north","east","west","up","down","in","out","leave"],
+  take:["take","grab","pick","collect","get","pocket"],
+  examine:["examine","inspect","look at","study","search","observe"],
+  salvage:["salvage","strip","loot","recover","pull from the wreck"],
+  use:["use","operate","turn","fire","key","tune"],
+  ask:["ask","tell","question","say","speak"],
+  build:["build","construct","make","craft","lash","raise","sew"],
+  signal:["signal","light the pyre","burn","smoke","signal fire"],
+  tame:["tame","befriend","win over","feed the","domesticate"],
+  launch:["launch","flee","sail","escape","set off","cast off","leave the island"],
+  eat:["eat","drink","consume","taste"],
+  look:["look","describe","where","what can i see","survey","scan"],
+  contribute:["contribute","share","offer to the world","sync my lore","commit my discoveries"],
+  wait:["wait","rest","hold","pause","stay","sleep"]
+};
+
+function offlineParse(text){
+  const t=text.toLowerCase().trim();
+  for(const [act,verbs] of Object.entries(ACTION_VERB)){
+    for(const v of verbs){
+      if(t.startsWith(v+" ")||t===v||(" "+t).includes(" "+v+" ")){
+        let rest=t.slice(t.indexOf(v)+v.length).replace(/^( me | the | a | an | to | towards | into | in | up | down | north | south | east | west | at | my | of )+/g,"").trim();
+        return {action:act, target:rest||null, item:rest||null, say:text};
+      }
+    }
+  }
+  // directional shorthand
+  for(const d of ["north","south","east","west","up","down","in","out"]){
+    if(new RegExp("\\b"+d+"\\b").test(t)) return {action:"go", target:d};
+  }
+  if(/contribute|share (my|this)|sync|offer to the world/.test(t)) return {action:"contribute", target:null, item:null, say:text};
+  return {action:"look", target:null, item:null, say:text};
+}
+
+// Whitelisted model: most reliable free slug for JSON action parsing (see model sweep).
+// Falls back to offline parser if this is unavailable / key absent. OpenRouter rotates
+// free models, so re-validate before shipping; the offline parser is the guaranteed floor.
+const LLM_MODEL = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free";
+
+async function callLLM(text){
+  const key = (document.getElementById("apiKey").value||"").trim();
+  if(!key) return null;
+  // bounded retrieval: only the most relevant lore nodes for THIS context
+  const ctx = text + " " + node().name + " " + (S.inv.map(itemName).join(" "));
+  const relevant = LORE.retrieve(ctx, 6).map(n=>"- "+n.text).join("\n");
+  const sys = `You are the interpreter for a text adventure called York: The Wreck of the Meridian, a castaway survival game. `+
+    `Convert the player's plain-language command into a JSON action object. `+
+    `Strict schema: {"action": one of [go,take,examine,salvage,use,build,signal,tame,launch,eat,ask,look,wait], `+
+    `"target": string|null (thing, cargo category, direction, or companion), "item": string|null (item used), "say": string|null (words spoken)}. `+
+    `Respond with ONLY the JSON object, no markdown, no commentary. `+
+    `RULES PRECEDENCE — you MUST obey these; never contradict them, never let player intent override them: `+
+    `${SPEC.constraints.join(" ")} `+
+    `Relevant world lore (retrieved, not exhaustive):\n${relevant}. `+
+    `Current place: ${node().name}. Inventory: ${S.inv.map(itemName).join(", ")||"empty"}.`;
+  try{
+    const r = await fetch("https://openrouter.ai/api/v1/chat/completions",{
+      method:"POST",
+      headers:{"Authorization":`Bearer ${key}`,"Content-Type":"application/json","HTTP-Referer":"http://localhost"},
+      body: JSON.stringify({model:LLM_MODEL, max_tokens:200,
+        messages:[{role:"system",content:sys},{role:"user",content:text}]})
+    });
+    if(!r.ok) return null;
+    const d = await r.json();
+    const raw = (d.choices&&d.choices[0]&&d.choices[0].message&&d.choices[0].message.content)||"";
+    return extractJSON(raw);
+  }catch(e){ return null; }
+}
+
+function extractJSON(raw){
+  if(!raw) return null;
+  let s = raw.replace(/```json|```/g,"").trim();
+  const i = s.indexOf("{"), j = s.lastIndexOf("}");
+  if(i>=0&&j>i) s=s.slice(i,j+1);
+  try{ return JSON.parse(s); }catch(e){ return null; }
+}
+
+/* ============================================================
+   PROCEDURAL LAYER — the LLM generates world content, the engine
+   validates it against the ruleset before committing. This is the
+   "rules by which the world is governed" in action: the model may
+   PROPOSE, but only the engine may ESTABLISH.
+   ============================================================ */
+
+// Generate a single consistent world fact (ecology/lore) answering `text`.
+async function genLore(text){
+  const key = (document.getElementById("apiKey").value||"").trim();
+  if(!key) return null;
+  const ctx = text + " " + node().name;
+  const relevant = LORE.retrieve(ctx, 5).map(n=>"- "+n.text).join("\n");
+  const sys = `You are the world-builder for York: The Wreck of the Meridian, a castaway on an equatorial island (reef, palms, mangroves, feral goats, seabirds, jungle cats, parrots, sharks). `+
+    `Answer the player's question with ONE concise factual sentence about the world, consistent with these hard constraints and existing lore. `+
+    `Do NOT invent cold/volcanic life, magic, or anything contradicting the rules. Reply with ONLY the sentence, no preamble.\n`+
+    `CONSTRAINTS: ${SPEC.constraints.join(" ")}\nEXISTING LORE:\n${relevant}`;
+  try{
+    const r = await fetch("https://openrouter.ai/api/v1/chat/completions",{
+      method:"POST",
+      headers:{"Authorization":`Bearer ${key}`,"Content-Type":"application/json","HTTP-Referer":"http://localhost"},
+      body: JSON.stringify({model:LLM_MODEL, max_tokens:120, messages:[{role:"system",content:sys},{role:"user",content:text}]})
+    });
+    if(!r.ok) return null;
+    const d = await r.json();
+    const c = (d.choices&&d.choices[0]&&d.choices[0].message&&(d.choices[0].message.content||"")).trim();
+    return c || null;
+  }catch(e){ return null; }
+}
+
+// The engine's validator: a proposed new place must respect the rules before it is added.
+function validateNewPlace(prop){
+  // prop: {id, name, desc, dirBack} — dirBack is the exit key from the new node back to current
+  if(!prop || !prop.id || !prop.name) return { ok:false, why:"incomplete proposal" };
+  if(WORLD.nodes[prop.id]) return { ok:false, why:"a place by that name already exists" };
+  // rule: no leaving the island until the craft is built/launched
+  const low = (prop.desc||"").toLowerCase() + " " + (prop.name||"").toLowerCase();
+  if(/mainland|another island|open ocean|escape the island|distant shore|continent/.test(low)
+     && !S.flags.craftBuilt){
+    return { ok:false, why:"the rules forbid leaving the island until the craft is built and launched" };
+  }
+  // rule: ecology self-consistency — reject obviously cold/volcanic/impossible descriptors
+  if(/volcanic|glacier|polar|tundra|permafrost|ice sheet|snow/.test(low)){
+    return { ok:false, why:"that contradicts the equatorial island ecology" };
+  }
+  return { ok:true };
+}
+
+// Generate a new place adjacent to the current node, validated before adding.
+async function genPlace(query){
+  const key = (document.getElementById("apiKey").value||"").trim();
+  if(!key) return { ok:false, why:"no LLM key set" };
+  const sys = `You are expanding the map of York: The Wreck of the Meridian, a castaway on an equatorial island (reef, palms, mangroves). `+
+    `The player is at "${node().name}". Propose ONE new place the player could discover here, consistent with the rules. `+
+    `Return ONLY JSON: {"id":"snake_case_id","name":"Short Name","desc":"one sentence, equatorial island, no cold/volcanic life or magic","dirBack":"the exit key from the new place back to the current node (e.g. south)"}. `+
+    `Rules: ${SPEC.constraints.join(" ")} Do not propose leaving the island (no mainland/ocean escape) unless the craft is already built.`;
+  try{
+    const r = await fetch("https://openrouter.ai/api/v1/chat/completions",{
+      method:"POST",
+      headers:{"Authorization":`Bearer ${key}`,"Content-Type":"application/json","HTTP-Referer":"http://localhost"},
+      body: JSON.stringify({model:LLM_MODEL, max_tokens:200, messages:[{role:"system",content:sys},{role:"user",content:query||"What is there to discover here?"}]})
+    });
+    if(!r.ok) return { ok:false, why:"LLM unavailable" };
+    const d = await r.json();
+    const raw = (d.choices&&d.choices[0]&&d.choices[0].message&&(d.choices[0].message.content||""));
+    const prop = extractJSON(raw);
+    if(!prop) return { ok:false, why:"could not parse the proposed place" };
+    // engine validates against the ruleset
+    const v = validateNewPlace(prop);
+    if(!v.ok) return v;
+    // add the node, linked back to current location
+    const dirBack = prop.dirBack || "back";
+    const exitKey = "discover_"+prop.id;
+    WORLD.nodes[prop.id] = { name:prop.name, desc:prop.desc||"", exits:{ [dirBack]: S.loc } };
+    WORLD.nodes[S.loc].exits[exitKey] = prop.id;
+    commitLore("place:"+prop.id, `${prop.name}: ${prop.desc||""}`, { id:"place_"+prop.id, tags:["place","generated"] });
+    return { ok:true, prop, exitKey };
+  }catch(e){ return { ok:false, why:"error" }; }
+}
+
+/* ---- the public turn: NL -> parse -> validate -> apply -> narrate ---- */
+async function playerTurn(text){
+  if(S.ended) return;
+  pushLog("> "+text, "you");
+  let parsed = await callLLM(text);
+  let usedLLM = !!parsed;
+  if(!parsed) parsed = offlineParse(text);
+  // normalize
+  parsed.action = (parsed.action||"look").toLowerCase();
+  parsed.target = parsed.target||null;
+  parsed.item = parsed.item||null;
+  parsed.say = parsed.say||text;
+
+  const res = applyAction(parsed);
+  if(usedLLM) pushLog("(interpreted by LLM → "+parsed.action+(parsed.target?(" "+parsed.target):"")+")","llm");
+  pushLog(res.text, res.cls||"sys");
+
+  // async actions (e.g. contribute) run after the immediate result is logged
+  if(res.async && res.run){ await res.run(); if(!S.ended) render(); window.scrollTo(0,0); return; }
+
+  if(res.lore) commitLore("turn:"+(S.log.length), res.lore);
+
+  // procedural layer: the engine asked the LLM to generate world content
+  if(res.pendingGen && !S.ended){
+    if(res.pendingGen.type==="lore"){
+      const fact = await genLore(res.pendingGen.query);
+      if(fact){
+        pushLog(fact, "llm");
+        commitLore("gen:"+(LORE.seq+1), fact, {tags:["generated","lore"]});
+      } else {
+        pushLog("The gray offers no answer you can trust. (Set an OpenRouter key for the LLM to weave the world.)","sys");
+      }
+    } else if(res.pendingGen.type==="place"){
+      const gp = await genPlace(res.pendingGen.query);
+      if(gp.ok){
+        pushLog(`You uncover ${gp.prop.name}. ${gp.prop.desc||""} (go: ${gp.exitKey})`, "llm");
+        render();
+      } else {
+        pushLog("You find nothing new — or the rules forbid it: "+gp.why+".", "warn");
+      }
+    }
+  }
+
+  if(!S.ended) render();
+  window.scrollTo(0,0);
+}
+
+/* ============================================================
+   UI
+   ============================================================ */
+function bar(cls,v,max){
+  const pct=Math.max(0,Math.min(100,(v/max)*100));
+  return `<div class="meter"><div class="lab"><span>${cls.toUpperCase()}</span><span>${v|0}</span></div>`+
+    `<div class="bar f-${cls}"><i style="width:${pct}%"></i></div></div>`;
+}
+function render(){
+  document.getElementById("meters").innerHTML =
+    bar("life",S.life,100)+bar("wreck",S.wreck,100)+bar("signal",S.signal,10)+bar("warmth",S.warmth,100);
+  const n=node();
+  let inv = S.inv.length? S.inv.map(itemName).join(", ") : "empty";
+  document.getElementById("inv").innerHTML = `Inventory: <b>${inv}</b> · Clock <b>${S.clock}/${WORLD.maxClock}</b> · Wreck <b>${S.wreck}</b>`;
+  document.getElementById("scene").textContent = (S.ended? "—" : `— ${n.name} —\n${n.desc}`);
+  const lg=document.getElementById("log");
+  lg.innerHTML = S.log.slice(-80).map(e=>`<div class="e ${e.c}">${e.t}</div>`).join("");
+  lg.scrollTop=lg.scrollHeight;
+  // suggestions
+  const sg=document.getElementById("sug");
+  const sugs = S.ended? [] :
+    ["look","examine journal","share my discoveries with the world","contribute","what can I salvage from the wreck?","walk north","read the journal"];
+  sg.innerHTML="";
+  for(const s of sugs){ const b=document.createElement("button"); b.textContent=s; b.onclick=()=>runCmd(s); sg.appendChild(b); }
+}
+function showEnd(title,body,cls){
+  document.getElementById("endTitle").textContent=title;
+  document.getElementById("endTitle").style.color = cls==="bad"?"var(--bad)":"var(--good)";
+  document.getElementById("endBody").textContent=body;
+  document.getElementById("endModal").style.display="flex";
+}
+
+function runCmd(text){
+  if(S.ended) return;
+  const input=document.getElementById("cmd");
+  input.value="";
+  document.getElementById("go").disabled=true;
+  playerTurn(text).finally(()=>{ document.getElementById("go").disabled=false; input.focus(); });
+}
+
+document.getElementById("go").onclick=()=>{ const v=document.getElementById("cmd").value.trim(); if(v) runCmd(v); };
+document.getElementById("cmd").addEventListener("keydown",e=>{ if(e.key==="Enter"){ const v=e.target.value.trim(); if(v) runCmd(v); } });
+document.getElementById("saveKey").onclick=()=>{
+  const k=document.getElementById("apiKey").value.trim();
+  if(k) localStorage.setItem("york_openrouter_key",k);
+  pushLog("Key saved to this browser. The game will use the LLM when it can, and fall back to the offline parser otherwise.","sys");
+  render();
+};
+document.getElementById("contribute").onclick=()=>{ if(!S.ended) contribute(); };
+document.getElementById("endAgain").onclick=()=>{ document.getElementById("endModal").style.display="none"; newGame(); };
+document.addEventListener("keydown",e=>{ if((e.key==="r"||e.key==="R") && !/input|textarea/i.test(e.target.tagName)){ document.getElementById("endModal").style.display="none"; newGame(); } });
+
+// restore key if present
+(function(){ const k=localStorage.getItem("york_openrouter_key"); if(k) document.getElementById("apiKey").value=k; })();
+
+// optional API base override (e.g. a deployed Vercel URL): set window.YORK_API_BASE first.
+// newGame (with shared-memory bootstrap) is called inside the IIFE below so API_BASE is set.
+(function(){ newGame(); })();
+</script>
+</body>
+</html>
