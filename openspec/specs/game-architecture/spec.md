@@ -76,3 +76,36 @@ deepens as the player returns.
 The LLM model SHALL be a single configurable identifier (defaulting to the most reliable
 free slug for JSON parsing). The free tier is unreliable; the offline parser is the
 guaranteed floor and SHALL never be removed.
+
+### Requirement: Three-tier memory with curated canonical truth
+World memory SHALL exist in three tiers that separate *open contribution* from *vetted
+truth*:
+1. **LOCAL** — the player's private, organic lore graph (e.g. localStorage), owned and
+   extended by this player alone. Local SHALL take precedence over shared on merge.
+2. **SHARED** — a server-held graph (e.g. Vercel KV via `/api/lore`) that MERGES
+   player-generated lore which has passed the ruleset. New players SHALL bootstrap from
+   the shared graph. Pushed nodes SHALL be rule-validated server-side before merge.
+3. **CANONICAL** — the world doc in the repo (`openspec/world/<world>.json`), the single
+   source of truth, modified ONLY by a human-curated change (OpenSpec PR). Players and
+   the LLM SHALL NOT write it directly.
+
+Players MAY PROPOSE (via push); only the engine + shared validator may ESTABLISH shared
+facts, and only a curator may promote shared → canonical. Rules precedence is preserved
+across tiers: nothing in any tier may contradict the ruleset.
+
+#### Scenario: player pushes a discovery
+- GIVEN a player has generated a world fact at play
+- WHEN they trigger share/contribute
+- THEN the engine pushes nodes with source in {play, generated}, the server validates them
+  against the ruleset, and merges non-duplicate survivors into the shared graph
+
+#### Scenario: new player boots
+- GIVEN the shared graph contains vetted-merged facts
+- WHEN a new game starts
+- THEN the engine SHALL pull the shared graph and commit its nodes (tagged "shared"),
+  without overwriting nodes the player already has locally
+
+#### Scenario: shared fact is promoted to canon
+- GIVEN a shared-tier fact that passed the ruleset and is not already canonical
+- WHEN a curator reviews and accepts it (via scripts/curate-lore.mjs → OpenSpec change)
+- THEN it is appended to the world doc's `lore_seed`; the shared graph is left intact

@@ -96,8 +96,9 @@
       <div class="inv" id="inv"></div>
       <div class="sug" id="sug"></div>
       <div id="input">
-        <input id="cmd" placeholder="what do you do?  e.g. 'walk to the tower and take the brass key'" />
+        <input id="cmd" placeholder="what do you do?" />
         <button id="go">Say</button>
+        <button id="contribute" title="Share this session's discoveries with the wider world (merged, rule-checked)">Contribute</button>
       </div>
       <div class="keys">
         type in plain language · <kbd>Enter</kbd> to act · <kbd>R</kbd> restart ·
@@ -301,6 +302,91 @@ function seedLore(g, doc){
   for(const fa of (eco.fauna||[]))   if(!g.nodes["eco_fauna_"+fa]) g.commit("fauna includes", fa, "", {id:"eco_fauna_"+fa,source:"spec",tags:["ecology","fauna",fa.toLowerCase().replace(/[^a-z]/g,"")]});
 }
 
+/* ============================================================
+   SHARED MEMORY — three tiers, rules precedence preserved.
+   LOCAL (localStorage) is this player's private, organic play.
+   SHARED (server KV via /api/lore) is merged, rule-validated lore
+   from all players; new players bootstrap from it. CANONICAL
+   (castaway.json in repo) is curated by a human; the LLM/players
+   never write it. Only the curator promotes vetted shared facts.
+   Push/pull are best-effort; the offline floor is unchanged.
+   ============================================================ */
+const API_BASE = (typeof window!=="undefined" && window.YORK_API_BASE) || "/api";
+
+// Player-generated nodes worth sharing: those the engine created at play
+// (source "play" or "generated"), excluding spec-seeded baseline facts.
+function collectContributions(){
+  const out = [];
+  for(const n of Object.values(LORE.nodes)){
+    if(n.source==="play" || n.source==="generated" || (n.tags&&n.tags.includes("generated"))){
+      out.push({ id:n.id, subject:n.subject, relation:n.relation, object:n.object,
+                 text:n.text, tags:n.tags||[], source:n.source, world:WORLD_ID });
+    }
+  }
+  return out;
+}
+
+// Client-side pre-filter for an obviously rule-breaking fact (mirrors server).
+// Returns null if acceptable, or a reason string if it must be dropped.
+function validateFactClient(text){
+  const t = String(text||"").toLowerCase();
+  // world-specific escape rule is enforced server-side against live state; here we
+  // only block content that contradicts the static ecology/identity constraints.
+  if(/jungle|palm tree|tropical|coral reef|equator|magic portal|dragon|unicorn/.test(t))
+    return "contradicts the world's ecology/identity constraints";
+  return null;
+}
+
+async function pushLore(){
+  const nodes = collectContributions();
+  if(!nodes.length) return { ok:true, pushed:0, skipped:0, note:"nothing new to share" };
+  // client pre-filter
+  let pushed=0, skipped=0;
+  const clean = nodes.filter(n=>{
+    const why = validateFactClient(n.text);
+    if(why){ skipped++; return false; }
+    pushed++; return true;
+  });
+  try{
+    const r = await fetch(API_BASE+"/lore",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({ world:WORLD_ID, nodes:clean })
+    });
+    if(!r.ok) return { ok:false, pushed:0, skipped, why:"server rejected ("+r.status+")" };
+    const d = await r.json().catch(()=>({}));
+    return { ok:true, pushed: pushed, skipped: skipped, merged: d.merged||pushed, note:d.note||"" };
+  }catch(e){ return { ok:false, pushed:0, skipped, why:"network error (offline floor intact)" }; }
+}
+
+async function pullLore(){
+  try{
+    const r = await fetch(API_BASE+"/lore?world="+encodeURIComponent(WORLD_ID));
+    if(!r.ok) return { ok:false, why:"server unavailable (using local + spec seed)" };
+    const d = await r.json().catch(()=>({}));
+    const shared = (d&&d.nodes)||[];
+    let added=0;
+    for(const n of shared){
+      // never overwrite a node the player already has (local precedence)
+      if(LORE.nodes[n.id]) continue;
+      LORE.commit(n.subject, n.relation, n.object,
+        { id:n.id, source:n.source||"shared", tags:(n.tags||[]).concat("shared"), turn:n.turn||0 });
+      added++;
+    }
+    if(added) persistLore();
+    return { ok:true, added };
+  }catch(e){ return { ok:false, why:"network error (using local + spec seed)" }; }
+}
+
+// Contribute action: push this session's discoveries to the shared world.
+async function contribute(){
+  pushLog("You offer what you've learned to the wider world…","sys");
+  const r = await pushLore();
+  if(r.ok) pushLog(`Shared ${r.pushed} discovery(ies) with the world.${r.skipped?(" ("+r.skipped+" skipped as off-rules)"):""}${r.note?(" "+r.note):""}`,"good");
+  else pushLog("Could not share just now: "+r.why+". Your local memory is safe.","warn");
+  render();
+}
+
 function newGame(){
   S = {
     loc: WORLD.start,
@@ -319,6 +405,14 @@ function newGame(){
   S.visited[S.loc]=true;
   pushLog("The Meridian is kindling on the reef. You crawl ashore on the Shingle Beach, the only soul left of her.","sys");
   pushLog("The wreck will not last the day. Salvage what you can — then decide how you leave this place.","sys");
+  // bootstrap from the SHARED world (best-effort; offline floor = local + spec seed).
+  // fire-and-forget: graph enriches as it arrives; persisted for next session.
+  pullLore().then(r=>{
+    if(r.ok && r.added>0){
+      pushLog(`The wider world remembers ${r.added} thing(s) others learned here.`,"fog");
+      render();
+    }
+  });
   render();
 }
 
@@ -381,6 +475,7 @@ function applyAction(a){
     case "launch": return doLaunch();
     case "ask": return doAsk(a.target, a.say);
     case "eat": return doEat(a.target);
+    case "contribute": return { ok:true, async:true, run:contribute };
     case "wait": return doWait();
     default: return {ok:false, text:"The island does not record that action."};
   }
@@ -648,6 +743,7 @@ const ACTION_VERB = {
   launch:["launch","flee","sail","escape","set off","cast off","leave the island"],
   eat:["eat","drink","consume","taste"],
   look:["look","describe","where","what can i see","survey","scan"],
+  contribute:["contribute","share","offer to the world","sync my lore","commit my discoveries"],
   wait:["wait","rest","hold","pause","stay","sleep"]
 };
 
@@ -665,6 +761,7 @@ function offlineParse(text){
   for(const d of ["north","south","east","west","up","down","in","out"]){
     if(new RegExp("\\b"+d+"\\b").test(t)) return {action:"go", target:d};
   }
+  if(/contribute|share (my|this)|sync|offer to the world/.test(t)) return {action:"contribute", target:null, item:null, say:text};
   return {action:"look", target:null, item:null, say:text};
 }
 
@@ -807,6 +904,9 @@ async function playerTurn(text){
   if(usedLLM) pushLog("(interpreted by LLM → "+parsed.action+(parsed.target?(" "+parsed.target):"")+")","llm");
   pushLog(res.text, res.cls||"sys");
 
+  // async actions (e.g. contribute) run after the immediate result is logged
+  if(res.async && res.run){ await res.run(); if(!S.ended) render(); window.scrollTo(0,0); return; }
+
   if(res.lore) commitLore("turn:"+(S.log.length), res.lore);
 
   // procedural layer: the engine asked the LLM to generate world content
@@ -855,7 +955,7 @@ function render(){
   // suggestions
   const sg=document.getElementById("sug");
   const sugs = S.ended? [] :
-    ["look","examine journal","ask Keeper-9 about the last keeper","discover what else is here","what birds live on this island?","walk north","take the iron key","read the journal"];
+    ["look","examine journal","share my discoveries with the world","contribute","what can I salvage from the wreck?","walk north","read the journal"];
   sg.innerHTML="";
   for(const s of sugs){ const b=document.createElement("button"); b.textContent=s; b.onclick=()=>runCmd(s); sg.appendChild(b); }
 }
@@ -882,13 +982,16 @@ document.getElementById("saveKey").onclick=()=>{
   pushLog("Key saved to this browser. The game will use the LLM when it can, and fall back to the offline parser otherwise.","sys");
   render();
 };
+document.getElementById("contribute").onclick=()=>{ if(!S.ended) contribute(); };
 document.getElementById("endAgain").onclick=()=>{ document.getElementById("endModal").style.display="none"; newGame(); };
 document.addEventListener("keydown",e=>{ if((e.key==="r"||e.key==="R") && !/input|textarea/i.test(e.target.tagName)){ document.getElementById("endModal").style.display="none"; newGame(); } });
 
 // restore key if present
 (function(){ const k=localStorage.getItem("york_openrouter_key"); if(k) document.getElementById("apiKey").value=k; })();
 
-newGame();
+// optional API base override (e.g. a deployed Vercel URL): set window.YORK_API_BASE first.
+// newGame (with shared-memory bootstrap) is called inside the IIFE below so API_BASE is set.
+(function(){ newGame(); })();
 </script>
 </body>
 </html>
