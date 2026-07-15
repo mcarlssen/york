@@ -31,8 +31,9 @@
   .bar{height:9px;background:#0c2018;border:1px solid var(--line);border-radius:5px;overflow:hidden}
   .bar>i{display:block;height:100%}
   .f-life>i{background:linear-gradient(90deg,#7dffb0,#3f7a5d)}
-  .f-storm>i{background:linear-gradient(90deg,#9bb7ff,#5a6bff)}
-  .f-beam>i{background:linear-gradient(90deg,#ffd166,#ff9f6b)}
+  .f-wreck>i{background:linear-gradient(90deg,#ffb86b,#ff6b6b)}
+  .f-signal>i{background:linear-gradient(90deg,#ffd166,#ff9f6b)}
+  .f-warmth>i{background:linear-gradient(90deg,#ff9f6b,#ff6b6b)}
   .inv{font-size:12px;color:var(--dim);margin-top:6px}
   .inv b{color:var(--ink)}
   #log{height:300px;overflow:auto;font-size:13px;padding-right:4px}
@@ -123,67 +124,73 @@
 
 /* ============================================================
    WORLD DOC — the single source of truth for this world.
-   Mirrors openspec/world/graylight.json (the authoring source). A POC
+   Mirrors openspec/world/castaway.json (the authoring source). A POC
    embeds a copy so it runs from file:// with no fetch/build step.
    The engine derives WORLD + SPEC from this; seedLore reads lore_seed
-   + ecology from it. Edit graylight.json to author the world, then
+   + ecology from it. Edit castaway.json to author the world, then
    re-sync this embed.
    ============================================================ */
 const WORLD_DOC = {
-  world_id: "graylight",
-  identity: { title:"Gray Light", tagline:"A keeper's island besieged by a sentient storm.", installment:"lighthouse", engine:"poc/lighthouse-nl/index.html" },
+  world_id: "castaway",
+  identity: { title:"The Wreck of the Meridian", tagline:"A castaway on a hostile shore. Loot the wreck before the sea takes it — then decide how you leave.", engine:"poc/lighthouse-nl/index.html" },
   constraints: [
-    "Ecology is self-consistent with a cold volcanic seabird island (auklets, storm-petrels, kelp, lichen, no tropical life).",
-    "Light is both tool and beacon: the beam repels the Fogmind but draws its attention; brighter beam = more Fogmind interest.",
-    "The Fogmind corrupts perception (phantom sights, false sounds, rerouted paths), not merely vision.",
-    "Keepers are a lineage; each left a journal. The lighthouse's history IS the threat.",
-    "Actions cost time. Each meaningful action advances the storm one tick. At storm 12 the peak breaks.",
-    "A locked connection requires its key item to be in inventory before travel is allowed.",
-    "The player cannot fly, swim the open ocean, or leave the island until the boathouse craft is built and launched."
+    "Ecology is self-consistent with an equatorial castaway island: reef, palms, mangroves, feral goats, seabirds, jungle cats, parrots, sharks. No cold/temperate or volcanic life.",
+    "SIGNAL vs CONCEAL: a signal (fire/pyre/light) raises rescue chance AND predator/wildlife attention; brighter signal = more of both. Staying dark and quiet is safe but unseen.",
+    "Wildlife is the antagonist: sharks in the water, night predators on land, storms at sea. The jungle cat and parrot can be tamed and turned to the player's use.",
+    "THE WRECK'S CLOCK: wreck integrity falls every turn (tide and weather). At 0 the wreck breaks up and its un-salvaged items are lost forever.",
+    "NIGHT falls on a cycle; warmth falls each night and is restored by fire or shelter. At warmth 0, life falls.",
+    "Each meaningful action advances the tide/clock one tick.",
+    "A locked connection or container requires its key item in inventory before it opens.",
+    "The player cannot leave the open ocean until a craft (raft or balloon) is built and launched, or until a rescue is triggered by signal.",
+    "Man Friday is omitted; the companion is a tamed jungle cat (hunting/scouting) and/or a tamed parrot (warning/messenger)."
   ],
   lore_seed: [
-    { id:"seed",     subject:"Gray Light", relation:"is", object:"a volcanic basalt islet in a vast cold ocean", tags:["world","island","setting"] },
-    { id:"fogmind",  subject:"Fogmind",    relation:"is", object:"a sentient storm besieging the island", tags:["fogmind","antagonist","storm"] },
-    { id:"keeper",   subject:"the player", relation:"is", object:"the newest keeper of the lighthouse; the last keeper is missing", tags:["keeper","player","lore"] },
-    { id:"light",    subject:"light",      relation:"is", object:"both tool and beacon; brighter beam repels the Fogmind but draws its attention", tags:["beam","light","rule"] },
-    { id:"perception", subject:"the Fogmind", relation:"corrupts", object:"perception (phantom sights, false sounds, rerouted paths), not merely vision", tags:["fogmind","rule","perception"] },
-    { id:"lineage",  subject:"keepers",    relation:"are", object:"a lineage; each left a journal; the lighthouse's history is the threat", tags:["keeper","lore","rule"] },
-    { id:"time",     subject:"each meaningful action", relation:"advances", object:"the storm one tick; at storm 12 the peak breaks", tags:["storm","rule","time"] },
-    { id:"lockrule", subject:"a locked connection", relation:"requires", object:"its key item in inventory before travel", tags:["rule","lock"] },
-    { id:"noescape", subject:"the player", relation:"cannot", object:"leave the island until the boathouse craft is built and launched", tags:["rule","escape","craft"] }
+    { id:"seed",  subject:"the Meridian", relation:"is", object:"a merchant brig wrecked on a reef off an uninhabited equatorial island", tags:["world","wreck","setting"] },
+    { id:"you",   subject:"the player", relation:"is", object:"the sole survivor of the Meridian, washed ashore with nothing", tags:["player","survivor","lore"] },
+    { id:"island",subject:"the island", relation:"is", object:"a forested equatorial island with a reef, a jungle, a freshwater spring, and a high cliff", tags:["island","setting","ecology"] },
+    { id:"wreckclock", subject:"the wreck", relation:"has", object:"an integrity that falls each turn; at 0 it is gone and its cargo lost", tags:["wreck","rule","clock"] },
+    { id:"signal",subject:"a signal", relation:"draws", object:"both rescue (ships/planes) and predators (sharks, night hunters)", tags:["signal","rule","conceal"] },
+    { id:"warmth",subject:"night", relation:"drains", object:"warmth; fire or shelter restores it; at 0 warmth, life falls", tags:["night","warmth","rule"] },
+    { id:"cat",   subject:"a jungle cat", relation:"is", object:"a wild predator that can be tamed with food; once tamed it hunts and scouts", tags:["cat","companion","wildlife"] },
+    { id:"parrot",subject:"a parrot", relation:"is", object:"a wild bird that can be tamed; once tamed it warns of ships and predators", tags:["parrot","companion","wildlife"] },
+    { id:"paths", subject:"escape", relation:"may_be", object:"by raft, by hot-air balloon, by signal rescue, or by enduring on the island", tags:["escape","ending","rule"] }
   ],
   ecology: {
-    climate:"cold, wind-scoured, salt",
-    terrain:["basalt cliffs","shingle beach","tide pools","thin soil"],
-    flora:["kelp","rock lichen","saltgrass"],
-    fauna:["auklets","storm-petrels","crabs","anemones"]
+    climate:"hot, humid, trade-wind, violent squalls",
+    terrain:["reef","shingle beach","mangrove flat","jungle interior","freshwater spring","basalt cliff"],
+    flora:["coconut palm","mangrove","breadfruit","wild fig","bamboo"],
+    fauna:["feral goat","jungle cat","parrot","crab","reef fish","seabird","shark"]
+  },
+  companions: {
+    cat:    { name:"the jungle cat", home:"jungle", tame_item:"goat_meat" },
+    parrot: { name:"the parrot", home:"cliff", tame_item:"fig" }
   },
   map: {
-    start:"beach", max_storm:12,
+    start:"beach", max_clock:16,
     nodes: {
-      beach:        { name:"Shingle Beach", desc:"Black basalt shingle. A cold sea hisses at your boots. Behind you, a cliff path climbs to the lighthouse; to one side, tide pools glitter.", exits:{ north:"cliff_path", west:"tide_pools" } },
-      tide_pools:   { name:"Tide Pools", desc:"Sheltered rock pools hold anemones and startled crabs. Among the wrack lies a rusted iron KEY, and a saltwater-damaged journal wrapped in oilcloth.", exits:{ east:"beach" }, items:["iron_key"], journal:"j_what" },
-      cliff_path:   { name:"Cliff Path", desc:"A worn switchback up the basalt. Halfway, a heavy iron door is set into the rock — the storm-cellar. It is locked.", exits:{ south:"beach", north:"tower_base", in:"storm_cellar", east:"watch_post" }, lock:{ dir:"in", key:"iron_key", lockedText:"The storm-cellar door is locked. An iron key would turn it." } },
-      watch_post:   { name:"Watch Post", desc:"A lean-to facing the sea. Inside, a brass TELESCOPE and a keeper's logbook. A path continues east to the chapel.", exits:{ west:"cliff_path", east:"chapel" }, items:["telescope"], journal:"j_tele" },
-      chapel:       { name:"Chapel of the Beacon", desc:"A low stone chapel. The altar holds a warm PRISM SHARD. A bell-rope hangs by the door. The crypt lies beneath, reached by a trapdoor.", exits:{ west:"watch_post", down:"crypt" }, items:["prism_shard"] },
-      crypt:        { name:"Crypt", desc:"Cold stone steps down to the keepers' tombs. One niche holds a leather journal and a brass KEY-TOKEN stamped with the lighthouse seal.", exits:{ up:"chapel" }, items:["brass_token"], journal:"j_echo" },
-      storm_cellar: { name:"Storm Cellar", desc:"A round vaulted room. A LEVER of black iron stands in the center; pulling it feeds the lighthouse lamp. A journal is bolted to the wall.", exits:{ out:"cliff_path" }, items:["lever"], journal:"j_fog" },
-      tower_base:   { name:"Lighthouse Base", desc:"The great lamp is dark. A spiral stair winds up to the lamp room. To the south, a boathouse clings to the rocks.", exits:{ south:"cliff_path", up:"lamp_room", south_west:"boathouse" } },
-      boathouse:    { name:"Boathouse", desc:"A half-ruined boathouse. Timbers and a fouled line lie within — enough to BUILD a small craft if you have the means. The open sea waits beyond.", exits:{ north_east:"tower_base" }, build:"craft" },
-      lamp_room:    { name:"Lamp Room", desc:"The dead lens looks out over a gray, churning horizon. From here the beam could be raised — if its power is fed from below.", exits:{ down:"tower_base" } }
+      beach:      { name:"Shingle Beach", desc:"Where the sea spat you out. The Meridian lies broken on the reef, a hundred yards out. The jungle waits inland; the cove and your camp sit along the shore.", exits:{ west:"tide_pools", north:"jungle", east:"wreck_shore", up:"cliff", south:"cove", south_east:"camp" } },
+      wreck_shore:{ name:"Wreck Shore", desc:"At low light you can wade toward the Meridian's hull. She is breaking up fast.", exits:{ west:"beach" }, salvage:true },
+      tide_pools: { name:"Tide Pools", desc:"Rock pools thick with crabs and shellfish; a seep of fresh water filters down.", exits:{ east:"beach" }, items:["crab","fresh_water"], forage:"food" },
+      jungle:     { name:"Jungle Interior", desc:"Close, green, loud with birds. Feral goats browse; something with yellow eyes watches from the figs.", exits:{ south:"beach", east:"spring", north:"cliff" }, items:["goat_meat","fig","bamboo"], cat_home:true },
+      spring:     { name:"Freshwater Spring", desc:"Cold sweet water wells from the rock. Life, here.", exits:{ west:"jungle" }, items:["fresh_water"], forage:"water" },
+      cliff:      { name:"The Cliff", desc:"A high bare promontory. From here you can see the whole reef — and be seen. A dead tree waits for a pyre.", exits:{ south:"jungle", down:"beach" }, build:"pyre", parrot_home:true },
+      cove:       { name:"Sheltered Cove", desc:"Calm water between two headlands. The place to build and launch a craft.", exits:{ south:"beach" }, build:"raft" },
+      camp:       { name:"Your Camp", desc:"A lean-to of palms and sailcloth you raised. Safe at night if the fire holds.", exits:{ south:"beach" }, build:"shelter" }
     },
-    journals: {
-      j_what:"Keeper-3: \"The fog spoke in my mother's voice today. I answered it. I will not do that again. If you read this — do not answer the fog.\"",
-      j_tele:"Keeper-7: \"Through the glass I saw the last keeper's boat circle the island nine times, then turn and sail INTO the light. No one sailed out. The sea does not give back.\"",
-      j_echo:"Keeper-9 (voice): \"I am the record, not the man. The man went down to the cellar and never came up. Pull the lever. Close what he opened.\"",
-      j_fog: "Keeper-5: \"The rift is not weather. It is a door the first keeper opened to see across the water. The beam holds it shut. Feed the lamp, keeper. Feed it, or we are all the fog.\""
+    containers: {
+      wreck: { name:"The Meridian (wreck)", holds:{ tools:"a hatchet, a knife, rope", sailcloth:"canvas from the fallen sail", provisions:"hardtack, a jar of rum", rifle:"a sodden musket and shot", radio:"a waterproof wireless set" } }
     },
     items: {
-      iron_key:{name:"iron key", desc:"A rusted iron key, salt-eaten but sound."},
-      telescope:{name:"brass telescope", desc:"A keeper's telescope. Through it, the gray reveals what the eye cannot."},
-      prism_shard:{name:"prism shard", desc:"A warm shard of the original beacon-lens. It hums faintly."},
-      brass_token:{name:"brass key-token", desc:"Stamped with the lighthouse seal — authorizes the lamp."},
-      lever:{name:"black iron lever", desc:"Heavy. Pulling it feeds the lamp from the cellar."}
+      tools:{name:"tools", desc:"hatchet, knife, rope — the means to build."},
+      sailcloth:{name:"sailcloth", desc:"canvas; shelters, sails, balloon envelope."},
+      provisions:{name:"provisions", desc:"hardtack and a jar of rum; staves off starvation, briefly."},
+      rifle:{name:"musket", desc:"sodden but serviceable; a noise that scares predators, a tool to hunt."},
+      radio:{name:"waterproof radio", desc:"a wireless set — if you can power and tune it, someone may answer."},
+      crab:{name:"crab", desc:"a tide-pool crab; food."},
+      goat_meat:{name:"goat meat", desc:"feral goat; real sustenance."},
+      fig:{name:"fig", desc:"wild fig; food and water."},
+      bamboo:{name:"bamboo", desc:"strong, light; raft and frame material."},
+      fresh_water:{name:"fresh water", desc:"the difference between life and the sun."}
     }
   }
 };
@@ -192,10 +199,11 @@ const WORLD_DOC = {
 function buildWorld(doc){
   return {
     start: doc.map.start,
-    maxStorm: doc.map.max_storm,
+    maxClock: doc.map.max_clock,
     nodes: doc.map.nodes,
-    journals: doc.map.journals,
-    items: doc.map.items
+    containers: doc.map.containers,
+    items: doc.map.items,
+    companions: doc.companions
   };
 }
 const WORLD = buildWorld(WORLD_DOC);
@@ -211,14 +219,16 @@ const SPEC = {
    ============================================================ */
 
 const ENDINGS = {
-  reignition: ["THE BEACON REIGNITES", "good",
-    "You feed the lamp, raise the beam, and the rift across the water seals like a wound closing. The Fogmind unravels into ordinary rain. Gray Light stands, and so do you."],
-  crossing: ["THE CROSSING", "good",
-    "The little craft slides off the rocks. The sea, for once, looks the other way. You sail into the gray and do not come back. The island is left to the storm — but you are not."],
-  collapse: ["THE DOOR OPENS", "bad",
-    "The storm peaks and the rift tears wide. The Fogmind walks its own light into the lighthouse. Gray Light goes dark, and keeps no keeper now."],
-  drown: ["LOST TO THE SEA", "bad",
-    "The cold takes you before the work is done. The log ends here, with your hand still on the rail."]
+  rescue_ship: ["A SAIL ON THE HORIZON", "good",
+    "Smoke and mirror-flame do their work. A sail heaves up over the reef, and a boat comes for you. The Meridian took everything; the island gave you just enough. You leave the gray behind."],
+  raft_escape: ["THE OPEN OCEAN", "good",
+    "The raft slides off the cove into the blue. You ship the bamboo outrigger and point her west, away from the reef. Whether anyone finds you, you have chosen the sea over the island."],
+  balloon: ["INTO THE CLOUDS", "bittersweet",
+    "The envelope fills; the world tilts and shrinks beneath you. You rise above the squalls, free and alone, a castaway of the sky now. The island becomes a green speck and is gone."],
+  endure: ["THE ISLAND IS HOME", "bittersweet",
+    "The clock runs out and still you stand — shelter roofed, fire banked, the cat at your feet, the parrot on your shoulder. You came ashore with nothing. You are a person of this place now."],
+  perish: ["THE SEA KEEPS YOU", "bad",
+    "Your strength gives out on the sand. The wreck is gone, the fire is cold, and the island does not miss you. The tide comes, as it always does."]
 };
 
 let S = null;
@@ -232,7 +242,7 @@ let LORE = null;          // persistent LoreGraph, loaded from storage or seeded
    prompt never bloats. Persisted per world id across sessions.
    ============================================================ */
 const LORE_STORE_KEY = "york_lore_v1";
-const WORLD_ID = "graylight";
+const WORLD_ID = "castaway";
 
 function LoreGraph(){
   this.nodes = {};        // id -> node
@@ -294,9 +304,12 @@ function seedLore(g, doc){
 function newGame(){
   S = {
     loc: WORLD.start,
-    life: 100, storm: 0, beam: 0,
-    inv: [], flags: {},
-    visited: {}, readJournal: {},
+    life: 100, warmth: 100, signal: 0, clock: 0,
+    wreck: 100,                  // the Wreck's Clock
+    night: false,
+    inv: [], flags: {}, tame: { cat:0, parrot:0 },
+    salvaged: {},
+    visited: {},
     ended: false, endKind: null,
     log: []
   };
@@ -304,8 +317,8 @@ function newGame(){
   LORE = loadLore() || new LoreGraph();
   seedLore(LORE, WORLD_DOC); // idempotent: only adds absent baseline nodes
   S.visited[S.loc]=true;
-  pushLog("You wash up on the Shingle Beach of Gray Light, the last keeper alive. The storm is a wall on the horizon.","sys");
-  pushLog("Keeper-9: \"Speak plainly, keeper. The island listens, and so do I.\"","fog");
+  pushLog("The Meridian is kindling on the reef. You crawl ashore on the Shingle Beach, the only soul left of her.","sys");
+  pushLog("The wreck will not last the day. Salvage what you can — then decide how you leave this place.","sys");
   render();
 }
 
@@ -332,13 +345,13 @@ function normalizeDir(t, exitKeys){
   if(!t) return null;
   let s = String(t).toLowerCase().trim();
   s = s.replace(/^(to |the |a |an |into |towards |through |up |down |in |out |at )+/g,"").trim();
-  const dirs = ["north_east","south_west","north","south","east","west","up","down","in","out",
-                "northeast","southwest"];
+  const dirs = ["north_east","south_east","south_west","north_west","north","south","east","west","up","down","in","out",
+                "northeast","southeast","southwest","northwest"];
   for(const d of dirs){
     const plain = d.replace("_"," ");
     if(s===d || s===plain || s.startsWith(d) || s.startsWith(plain) ||
        new RegExp("\\b"+plain.replace(/ /g,"\\s*")+"\\b").test(s))
-      return d==="northeast"?"north_east":d==="southwest"?"south_west":d;
+      return d==="northeast"?"north_east":d==="southeast"?"south_east":d==="southwest"?"south_west":d==="northwest"?"north_west":d;
   }
   // destination name match
   for(const ek of exitKeys){
@@ -360,32 +373,36 @@ function applyAction(a){
     case "examine": return doExamine(a.target);
     case "go": return doGo(a.target);
     case "take": return doTake(a.target);
+    case "salvage": return doSalvage(a.target);
     case "use": return doUse(a.target, a.item);
-    case "ask": return doAsk(a.target, a.say);
-    case "read": return doRead(a.target);
-    case "build": return doBuild();
+    case "build": return doBuild(a.target);
+    case "signal": return doSignal(a.target);
+    case "tame": return doTame(a.target);
     case "launch": return doLaunch();
-    case "discover": return doDiscover();
+    case "ask": return doAsk(a.target, a.say);
+    case "eat": return doEat(a.target);
     case "wait": return doWait();
-    default: return {ok:false, text:"The keeper's log does not record that action."};
+    default: return {ok:false, text:"The island does not record that action."};
   }
 }
 
-function tick(){ S.storm = Math.min(WORLD.maxStorm, S.storm+1); }
+function tick(){ S.clock = Math.min(WORLD.maxClock, S.clock+1); }
 function lifeDelta(d){ S.life = Math.max(0, Math.min(100, S.life+d)); }
-function beamDelta(d){ S.beam = Math.max(0, Math.min(5, S.beam+d)); }
+function warmthDelta(d){ S.warmth = Math.max(0, Math.min(100, S.warmth+d)); }
+function signalDelta(d){ S.signal = Math.max(0, Math.min(10, S.signal+d)); }
+function tameDelta(which,d){ S.tame[which]=Math.max(0,Math.min(10,S.tame[which]+d)); }
 
 function describe(){
   const n = node();
   let txt = `— ${n.name} —\n${n.desc}`;
-  const exits = Object.keys(n.exits||{}).filter(d=>{
-    if(n.lock && n.lock.dir===d) return hasItem(n.lock.key);
-    return true;
-  });
+  const exits = Object.keys(n.exits||{});
   if(exits.length) txt += `\n\nPaths: ${exits.join(", ")}.`;
   const here = (n.items||[]).filter(i=>!hasItem(i));
   if(here.length) txt += `\nYou can see: ${here.map(itemName).join(", ")}.`;
-  if(n.journal && !S.readJournal[n.journal]) txt += `\nA keeper's journal is here.`;
+  if(n.salvage) txt += `\nThe Meridian groans on the reef (integrity ${S.wreck}). Salvage a cargo: tools, sailcloth, provisions, rifle, radio.`;
+  if(n.build) txt += `\nYou could build here (${n.build}).`;
+  if(n.cat_home && !S.tame.cat) txt += `\nA jungle cat watches from the green. (tame it with goat meat)`;
+  if(n.parrot_home && !S.tame.parrot) txt += `\nA parrot cocks its head. (tame it with a fig)`;
   return {ok:true, text:txt, cls:"good"};
 }
 
@@ -393,23 +410,14 @@ function doExamine(t){
   if(!t) return {ok:false,text:"Examine what?"};
   const tgt = String(t).toLowerCase();
   const n = node();
-  // items here
-  const itemHere = (n.items||[]).find(i=>!hasItem(i) && itemName(i).toLowerCase().includes(tgt));
+  const itemHere = matchItem((n.items||[]), tgt);
   if(itemHere) return {ok:true, text:WORLD.items[itemHere].desc, cls:"good"};
-  // items in inv
-  const itemInv = S.inv.find(i=>itemName(i).toLowerCase().includes(tgt));
+  const itemInv = S.inv.find(i=>i===tgt.replace(/_/g," ")||itemName(i).toLowerCase()===tgt.replace(/_/g," ")||itemName(i).toLowerCase().includes(tgt));
   if(itemInv) return {ok:true, text:WORLD.items[itemInv].desc, cls:"good"};
-  // the place / feature — if it names something not obviously here, let the LLM
-  // generate a consistent ecological/lore fact about it (e.g. "examine the birds")
   if(tgt.length>2 && !/here|room|place|around|surroundings/.test(tgt)){
-    return {ok:true, text:`You study ${t}.`, cls:"good", pendingGen:{type:"lore", query:"Describe "+t+" on Gray Light, a cold volcanic seabird islet besieged by the Fogmind."}};
+    return {ok:true, text:`You study ${t}.`, cls:"good", pendingGen:{type:"lore", query:"Describe "+t+" on the Meridian's island, an equatorial castaway isle with reef, jungle, goats, cats, parrots, sharks."}};
   }
   return {ok:true, text:`You study ${t}. ${n.desc}`, cls:"good"};
-}
-
-// Discover a new place adjacent to the current node (procedural map expansion).
-function doDiscover(){
-  return {ok:true, text:`You search for what else the island hides here.`, cls:"fog", pendingGen:{type:"place", query:null}};
 }
 
 function doGo(t){
@@ -418,128 +426,189 @@ function doGo(t){
   if(!dir) return {ok:false, text:"There is no such way from here.", cls:"warn"};
   const chk = canTravel(dir);
   if(!chk.ok){
-    return {ok:false, text:(chk.text||"That way is locked.")+` (needs: ${itemName(chk.need)})`, cls:"warn"};
+    return {ok:false, text:(chk.text||"That way is blocked."), cls:"warn"};
   }
   const dest = dirToNode(dir);
   S.loc = dest; S.visited[dest]=true; tick();
+  // wreck salvage adjacency: being at wreck_shore ages the wreck faster
+  if(dest==="wreck_shore") ageWreck(4); else ageWreck(2);
   const r = describe();
-  // entering a new place can surface a journal automatically
-  const n=node();
-  if(n.journal && !S.readJournal[n.journal]){
-    r.text += `\n\nA keeper's journal lies here. (examine journal / read it)`;
-  }
-  // storm pressure on travel
-  if(S.storm>=9){ lifeDelta(-6); r.text += `\nThe wind flays you as you move. Life -6.`; }
-  checkStormPeak();
+  checkEnd();
   return r;
 }
 
+function matchItem(here, tgt){
+  const t=String(tgt).toLowerCase().replace(/_/g," ").trim();
+  return here.find(i=>!hasItem(i) && (i===t || itemName(i).toLowerCase()===t || itemName(i).toLowerCase().includes(t) || i.includes(t.replace(/ /g,"_"))));
+}
 function doTake(t){
   if(!t) return {ok:false, text:"Take what?"};
-  const tgt=String(t).toLowerCase();
   const n=node();
-  const it=(n.items||[]).find(i=>!hasItem(i) && itemName(i).toLowerCase().includes(tgt));
+  const it=matchItem((n.items||[]), t);
   if(!it) return {ok:false, text:`There is no ${t} here to take.`, cls:"warn"};
-  S.inv.push(it); tick();
+  S.inv.push(it); tick(); ageWreck(1);
   return {ok:true, text:`You take the ${itemName(it)}.`, cls:"good"};
+}
+
+// The Wreck's Clock: salvage pulls one cargo category; wreck integrity falls each turn.
+function doSalvage(t){
+  if(S.loc!=="wreck_shore") return {ok:false, text:"You must be at the Wreck Shore to salvage the Meridian.", cls:"warn"};
+  if(S.wreck<=0) return {ok:false, text:"The Meridian has broken up and sunk. Her cargo is lost to the reef.", cls:"warn"};
+  const cat = (t||"").toLowerCase();
+  const holds = WORLD.containers.wreck.holds;
+  const key = Object.keys(holds).find(k=> k===cat || holds[k].toLowerCase().includes(cat) || cat.includes(k));
+  if(!key) return {ok:false, text:"Salvage what? (tools, sailcloth, provisions, rifle, radio)", cls:"warn"};
+  if(S.salvaged[key]) return {ok:false, text:`You already stripped the ${key} from the wreck.`, cls:"warn"};
+  S.inv.push(key); S.salvaged[key]=true; tick(); ageWreck(3);
+  let txt = `You wrest ${holds[key]} from the dying hull.`;
+  if(key==="radio") txt += " The wireless is sealed in oilskin — it might still work.";
+  if(S.wreck<=0) txt += " Even as you climb clear, the Meridian comes apart behind you.";
+  return {ok:true, text:txt, cls:"good"};
+}
+
+function ageWreck(d){
+  if(S.wreck<=0) return;
+  S.wreck = Math.max(0, S.wreck - d);
+  if(S.wreck===0){ pushLog("The Meridian breaks her back on the reef and is gone. Anything not yet salvaged is lost.","bad"); }
 }
 
 function doUse(t, item){
   const tgt=String(t||"").toLowerCase();
-  // pull the lever in the cellar -> feeds the lamp
-  if(tgt.includes("lever") && S.loc==="storm_cellar"){
-    if(!hasItem("lever")) return {ok:false,text:"You have no lever to pull.",cls:"warn"};
-    if(S.flags.leverPulled) return {ok:true,text:"The lever is already down. The lamp is fed.",cls:"good"};
-    S.flags.leverPulled=true; beamDelta(2); tick();
-    return {ok:true, text:"You haul the black lever down. Somewhere above, the lamp groans awake. Beam +2.", cls:"good"};
+  // eat/drink handled by doEat; here handle tool use
+  if(tgt.includes("rifle") && hasItem("rifle")){
+    return {ok:true, text:"You level the musket. The report sends the wildlife bolting — and warns the sharks you are here. (useful to hunt or scare, but loud)", cls:"warn", lore:"The musket's report scares predators but draws the sea's attention."};
   }
-  // raise the beam in the lamp room (needs lever fed)
-  if((tgt.includes("beam")||tgt.includes("lamp")) && S.loc==="lamp_room"){
-    if(!S.flags.leverPulled) return {ok:false,text:"The lamp is cold. Feed it from the cellar first (pull the lever).",cls:"warn"};
-    if(S.beam>=5) return {ok:true,text:"The beam is already at full strength.",cls:"good"};
-    beamDelta(3); tick(); checkStormPeak();
-    return {ok:true, text:"You raise the beam. Light carves the gray — the rift shudders. Beam +3.", cls:"good"};
+  if(tgt.includes("radio") && hasItem("radio")){
+    return {ok:true, text:"You key the wireless. Static, then a voice through the storm: \"...any survivor, this is the trading schooner *Avis*... we hold offshore at the reef...\" — if you raise a signal, they will come.", cls:"fog", lore:"The wireless reaches the schooner Avis, holding offshore; a signal will bring rescue."};
   }
-  // telescope from watch post
-  if(tgt.includes("telescope") && hasItem("telescope")){
-    return {ok:true, text:"Through the glass the gray thins: you see the last keeper's boat, circling, never landing. The log was true.", cls:"fog", lore:"The last keeper's boat circles the island and never lands."};
-  }
-  // prism shard at chapel/lamp
-  if(tgt.includes("prism") && hasItem("prism_shard")){
-    return {ok:true, text:"The shard hums against your palm, aligning with the lens. The beam will hold longer when raised.", cls:"good"};
-  }
-  // bell at chapel
-  if(tgt.includes("bell") && S.loc==="chapel"){
-    return {ok:true, text:"The bell rings out. Phantom villagers dissolve like smoke. The fog's whispers quiet.", cls:"good", lore:"Ringing the chapel bell routs phantom villagers."};
-  }
-  return {ok:false, text:"You can't use that here.", cls:"warn"};
+  return {ok:false, text:"You can't use that here. (try: salvage, build, signal, tame, eat)", cls:"warn"};
 }
 
 function doRead(t){
-  const tgt=String(t||"").toLowerCase();
-  const n=node();
-  if(n.journal && (tgt.includes("journal")||tgt==="")){
-    S.readJournal[n.journal]=true; tick();
-    const txt = WORLD.journals[n.journal];
-    commitLore("journal:"+n.journal, txt, { id:n.journal, tags:["journal","keeper"] });
-    return {ok:true, text: txt + "\n\n(The words are committed to the keeper's memory.)", cls:"fog", lore:txt};
-  }
-  return {ok:false, text:"There is nothing here to read.", cls:"warn"};
+  // no journals in this world; reading the landscape is doExamine. Keep for LLM parity.
+  return {ok:false, text:"There is no writing here to read — only the island, and what it chooses to show you.", cls:"warn"};
 }
 
 function doAsk(t, say){
   const tgt=String(t||"").toLowerCase();
-  if(tgt.includes("keeper")||tgt.includes("9")||!t){
-    // Keeper-9 answers from known lore/state
-    let ans = "Keeper-9: ";
-    if(say && /last keeper|previous|before|missing|what happened/.test(say))
-      ans += "\"The last keeper went down to the cellar and never came up. Pull the lever. Close what he opened.\"";
-    else if(say && /fogmind|fog|storm/.test(say))
-      ans += "\"It is not weather. It is a door the first keeper opened. The beam holds it shut. Brighter beam — more it notices you.\"";
-    else if(say && /beam|lamp|light/.test(say))
-      ans += "\"Feed the lamp from the cellar, then raise it from the lamp room. The prism shard steadies it.\"";
-    else if(say && /escape|leave|boat|sea/.test(say))
-      ans += "\"Build the craft in the boathouse, if you have the shard and the lever's work done. Then launch. The sea may or may not look away.\"";
-    else
-      ans += "\"I am the record, not the man. Explore. Read what the keepers left. The island tells its own history.\"";
-    return {ok:true, text:ans, cls:"fog"};
+  if(say && /cat|parrot|companion|animal|tame/.test(say)){
+    return {ok:true, text:`The cat, if tamed, hunts and scouts. The parrot, if tamed, warns of ships and predators. Feed them (goat meat / fig) where they live to win them.`, cls:"fog"};
   }
-  // unknown question about the world -> let the LLM generate a consistent fact (if key set)
-  if(say && (say.match(/\?$/)||/what|who|why|how|where|tell me|describe|ecology|animal|plant|bird|creature|history/.test(say))){
-    return {ok:true, text:`You pose the question to the gray.`, cls:"fog", pendingGen:{type:"lore", query:say}};
+  if(say && /signal|fire|rescue|ship|escape/.test(say)){
+    return {ok:true, text:`A signal fire on the cliff draws rescue — and predators. Bright signal, more of both. Build a pyre there, or tune the radio if you salvaged it.`, cls:"fog"};
   }
-  return {ok:true, text:`You call into the gray. Only the wind answers — and something in it memorizes your voice.`, cls:"fog"};
+  if(say && /wreck|meridian|salvage/.test(say)){
+    return {ok:true, text:`The Meridian is breaking up on the reef. Her cargo — tools, sailcloth, provisions, a musket, a wireless — is yours if you take it before the sea does.`, cls:"fog"};
+  }
+  if(say && (say.match(/\?$/)||/what|who|why|how|where|describe|ecology|animal|plant|bird|creature|history/.test(say))){
+    return {ok:true, text:`You put the question to the island.`, cls:"fog", pendingGen:{type:"lore", query:say}};
+  }
+  return {ok:true, text:`You speak to the wind. Something in the palms listens, and remembers your voice.`, cls:"fog"};
 }
 
-function doBuild(){
-  if(S.loc!=="boathouse") return {ok:false,text:"There is nothing to build here.",cls:"warn"};
-  if(S.flags.craftBuilt) return {ok:true,text:"The craft is already built. Launch it when ready.",cls:"good"};
-  if(!hasItem("prism_shard")) return {ok:false,text:"You need the prism shard to steady a craft against the fog.",cls:"warn"};
-  if(!S.flags.leverPulled) return {ok:false,text:"The lamp must be fed (lever pulled) before the sea will let a craft launch.",cls:"warn"};
-  S.flags.craftBuilt=true; tick();
-  return {ok:true, text:"You lash the timbers and set the prism shard at the prow. A small craft takes shape. (launch it to flee)", cls:"good"};
+function doBuild(t){
+  const what = (t||"").toLowerCase();
+  const n = node();
+  if(!n.build) return {ok:false, text:"There is nothing to build here.", cls:"warn"};
+  if(n.build!==what && !["raft","pyre","shelter","balloon"].includes(what)) 
+    return {ok:false, text:`Here you can build: ${n.build}.`, cls:"warn"};
+  if(what==="raft"){
+    if(S.flags.raftBuilt) return {ok:true, text:"The raft is already built. Launch it.", cls:"good"};
+    if(!hasItem("tools")||!hasItem("sailcloth")||!hasItem("bamboo"))
+      return {ok:false, text:"A raft needs tools, sailcloth, and bamboo.", cls:"warn"};
+    S.flags.raftBuilt=true; tick();
+    return {ok:true, text:"You lash bamboo into an outrigger and rig the sailcloth. A sea-worthy raft. (launch it to leave)", cls:"good"};
+  }
+  if(what==="pyre"){
+    if(S.flags.pyreBuilt) return {ok:true, text:"The pyre stands ready on the cliff. Feed it to signal.", cls:"good"};
+    if(!hasItem("tools")&&!hasItem("bamboo")) return {ok:false, text:"You need tools or bamboo to raise a pyre.", cls:"warn"};
+    S.flags.pyreBuilt=true; tick();
+    return {ok:true, text:"You stack bamboo and driftwood into a pyre on the cliff, ready to light.", cls:"good"};
+  }
+  if(what==="shelter"){
+    if(S.flags.shelterBuilt) return {ok:true, text:"Your camp is already standing.", cls:"good"};
+    if(!hasItem("tools")&&!hasItem("sailcloth")) return {ok:false, text:"A shelter needs tools or sailcloth.", cls:"warn"};
+    S.flags.shelterBuilt=true; tick();
+    return {ok:true, text:"You raise a lean-to of palms and sailcloth. A roof against the squall, a hearth within.", cls:"good"};
+  }
+  if(what==="balloon"){
+    if(S.flags.balloonBuilt) return {ok:true, text:"The balloon envelope is already sewn. Launch it.", cls:"good"};
+    if(!hasItem("sailcloth")||!hasItem("tools")) return {ok:false, text:"A balloon needs sailcloth and tools.", cls:"warn"};
+    S.flags.balloonBuilt=true; tick();
+    return {ok:true, text:"You sew the sailcloth into an envelope and cage it with bamboo. Mad, but it might fly. (launch it to leave)", cls:"bittersweet"};
+  }
+  return {ok:false, text:"You can't build that here.", cls:"warn"};
 }
 
-function doLaunch(){
-  if(!S.flags.craftBuilt) return {ok:false,text:"There is no craft to launch.",cls:"warn"};
-  endGame("crossing"); return {ok:true,text:"",cls:"good"};
-}
-
-function doWait(){
-  tick(); lifeDelta(-2);
-  let txt="You hold your ground. The storm advances. Life -2.";
-  checkStormPeak();
+function doSignal(t){
+  if(!S.flags.pyreBuilt) return {ok:false, text:"You need a pyre on the cliff before you can signal. (build pyre)", cls:"warn"};
+  if(S.loc!=="cliff") return {ok:false, text:"The pyre is on the cliff. Go there to feed it.", cls:"warn"};
+  signalDelta(3); warmthDelta(2); tick();
+  let txt="You feed the pyre; smoke and flame climb into the blue. Signal +3 — rescue may see it. So may the sharks and the things that hunt at night.";
+  // a high signal with a way to be heard/seen can trigger rescue
+  if(S.signal>=8 && (hasItem("radio")||S.tame.parrot>=5)){
+    pushLog("Smoke on the horizon resolves into a sail — the schooner *Avis* answers your signal.","good");
+    endGame("rescue_ship");
+  }
   return {ok:true, text:txt, cls:"warn"};
 }
 
+function doTame(t){
+  const which = (t||"").toLowerCase().includes("parrot") ? "parrot" : (t||"").toLowerCase().includes("cat") ? "cat" : null;
+  if(!which) return {ok:false, text:"Tame what? (the cat, the parrot)", cls:"warn"};
+  const c = WORLD.companions[which];
+  if(S.loc!==c.home) return {ok:false, text:`The ${which} is not here. It lives at the ${c.home}.`, cls:"warn"};
+  if(S.tame[which]>=10) return {ok:true, text:`The ${which} is already yours.`, cls:"good"};
+  if(!hasItem(c.tame_item)) return {ok:false, text:`You need ${c.tame_item} to tame the ${which}.`, cls:"warn"};
+  // consume one unit of the tame item
+  const i=S.inv.indexOf(c.tame_item); if(i>=0) S.inv.splice(i,1);
+  tameDelta(which, 10); tick();
+  const name = which==="cat" ? "The jungle cat" : "The parrot";
+  return {ok:true, text:`You offer the ${c.tame_item}. ${name} settles, decides you are not prey. It is yours now — and useful.`, cls:"good"};
+}
+
+function doLaunch(){
+  if(S.flags.raftBuilt){ endGame("raft_escape"); return {ok:true,text:""}; }
+  if(S.flags.balloonBuilt){ endGame("balloon"); return {ok:true,text:""}; }
+  return {ok:false, text:"You have no craft to launch. (build raft / balloon)", cls:"warn"};
+}
+
+function doEat(t){
+  const tgt=String(t||"").toLowerCase();
+  const food = ["crab","goat_meat","fig","provisions","fresh_water"].find(f=> tgt.includes(f) || (WORLD.items[f]&&WORLD.items[f].name.toLowerCase().includes(tgt)));
+  if(!food) return {ok:false, text:"You have nothing like that to eat or drink.", cls:"warn"};
+  const i=S.inv.indexOf(food); if(i<0 && !["fresh_water"].includes(food)) return {ok:false, text:`You don't have ${food}.`, cls:"warn"};
+  if(i>=0) S.inv.splice(i,1);
+  lifeDelta(food==="fresh_water"?8:14); tick(); ageWreck(0);
+  return {ok:true, text:`You eat/drink the ${WORLD.items[food].name}. Life restored.`, cls:"good"};
+}
+
+function doWait(){
+  tick(); ageWreck(2);
+  // night cycle: warmth falls, mitigated by shelter/fire
+  S.night = !S.night;
+  if(S.night){
+    const mit = (S.flags.shelterBuilt?30:0) + (S.flags.pyreBuilt&&S.signal>0?20:0);
+    const drop = Math.max(0, 25 - mit);
+    warmthDelta(-drop); lifeDelta(-3);
+    let txt=`Night falls. Warmth -${drop}, life -3.`;
+    if(S.warmth<=0) txt += " The cold bites deep.";
+    checkEnd();
+    return {ok:true, text:txt, cls:"warn"};
+  }
+  return {ok:true, text:"You rest through the heat of the day. The clock advances; the wreck ages.", cls:"warn"};
+}
+
 /* ---- win / lose ---- */
-function checkStormPeak(){
+function checkEnd(){
   if(S.ended) return;
-  if(S.storm>=WORLD.maxStorm){
-    if(S.beam>=5) endGame("reignition");
-    else endGame("collapse");
-  } else if(S.life<=0){
-    endGame("drown");
+  if(S.life<=0){ endGame("perish"); return; }
+  if(S.warmth<=0){ lifeDelta(-8); if(S.life<=0){ endGame("perish"); return; } }
+  if(S.clock>=WORLD.maxClock){
+    // survived to the end of the clock
+    if(S.flags.shelterBuilt && S.life>0) endGame("endure");
+    else if(S.signal>=8 && (hasItem("radio")||S.tame.parrot>=5)) endGame("rescue_ship");
+    else endGame("perish");
   }
 }
 
@@ -548,7 +617,7 @@ function checkStormPeak(){
 function commitLore(key, fact, opts){
   if(!fact) return;
   opts = opts || {};
-  LORE.commit(key, "is", fact, { source:"play", tags: opts.tags||["discovered"], turn: S.storm,
+  LORE.commit(key, "is", fact, { source:"play", tags: opts.tags||["discovered"], turn: S.clock,
     id: opts.id || "T"+(LORE.seq+1) });
   persistLore();
 }
@@ -570,30 +639,24 @@ const ACTION_VERB = {
   go:["go","walk","move","head","climb","enter","run","travel","south","north","east","west","up","down","in","out","leave"],
   take:["take","grab","pick","collect","get","pocket"],
   examine:["examine","inspect","look at","study","search","observe"],
-  read:["read"],
-  use:["use","pull","raise","ring","activate","operate","turn"],
+  salvage:["salvage","strip","loot","recover","pull from the wreck"],
+  use:["use","operate","turn","fire","key","tune"],
   ask:["ask","tell","question","say","speak"],
-  build:["build","construct","make","craft","lash"],
-  launch:["launch","flee","sail","escape","leave the island"],
-  discover:["discover","explore","search for","find new","delve","probe"],
+  build:["build","construct","make","craft","lash","raise","sew"],
+  signal:["signal","light the pyre","burn","smoke","signal fire"],
+  tame:["tame","befriend","win over","feed the","domesticate"],
+  launch:["launch","flee","sail","escape","set off","cast off","leave the island"],
+  eat:["eat","drink","consume","taste"],
   look:["look","describe","where","what can i see","survey","scan"],
-  wait:["wait","rest","hold","pause","stay"]
+  wait:["wait","rest","hold","pause","stay","sleep"]
 };
 
 function offlineParse(text){
   const t=text.toLowerCase().trim();
-  // "examine/read journal" and "read it" -> read
-  if(/(journal|it|log|book)/.test(t) && ACTION_VERB.read.some(v=>t.startsWith(v))){
-    return {action:"read", target:"journal", item:null, say:text};
-  }
-  if(/(journal|log|book)/.test(t) && ACTION_VERB.examine.some(v=>t.includes(v))){
-    return {action:"read", target:"journal", item:null, say:text};
-  }
   for(const [act,verbs] of Object.entries(ACTION_VERB)){
     for(const v of verbs){
       if(t.startsWith(v+" ")||t===v||(" "+t).includes(" "+v+" ")){
-        let rest=t.slice(t.indexOf(v)+v.length).replace(/^( me | the | a | an | to | towards | into | in | up | down | north | south | east | west | at )+/g,"").trim();
-        if(act==="discover") return {action:"discover", target:null, item:null, say:text};
+        let rest=t.slice(t.indexOf(v)+v.length).replace(/^( me | the | a | an | to | towards | into | in | up | down | north | south | east | west | at | my | of )+/g,"").trim();
         return {action:act, target:rest||null, item:rest||null, say:text};
       }
     }
@@ -616,10 +679,10 @@ async function callLLM(text){
   // bounded retrieval: only the most relevant lore nodes for THIS context
   const ctx = text + " " + node().name + " " + (S.inv.map(itemName).join(" "));
   const relevant = LORE.retrieve(ctx, 6).map(n=>"- "+n.text).join("\n");
-  const sys = `You are the interpreter for a text adventure called York: Gray Light. `+
+  const sys = `You are the interpreter for a text adventure called York: The Wreck of the Meridian, a castaway survival game. `+
     `Convert the player's plain-language command into a JSON action object. `+
-    `Strict schema: {"action": one of [go,take,examine,read,use,ask,build,launch,look,wait], `+
-    `"target": string|null (thing or direction), "item": string|null (item used), "say": string|null (words spoken to Keeper-9)}. `+
+    `Strict schema: {"action": one of [go,take,examine,salvage,use,build,signal,tame,launch,eat,ask,look,wait], `+
+    `"target": string|null (thing, cargo category, direction, or companion), "item": string|null (item used), "say": string|null (words spoken)}. `+
     `Respond with ONLY the JSON object, no markdown, no commentary. `+
     `RULES PRECEDENCE — you MUST obey these; never contradict them, never let player intent override them: `+
     `${SPEC.constraints.join(" ")} `+
@@ -781,10 +844,10 @@ function bar(cls,v,max){
 }
 function render(){
   document.getElementById("meters").innerHTML =
-    bar("life",S.life,100)+bar("storm",S.storm,WORLD.maxStorm)+bar("beam",S.beam,5);
+    bar("life",S.life,100)+bar("wreck",S.wreck,100)+bar("signal",S.signal,10)+bar("warmth",S.warmth,100);
   const n=node();
   let inv = S.inv.length? S.inv.map(itemName).join(", ") : "empty";
-  document.getElementById("inv").innerHTML = `Inventory: <b>${inv}</b> · Storm <b>${S.storm}/${WORLD.maxStorm}</b>`;
+  document.getElementById("inv").innerHTML = `Inventory: <b>${inv}</b> · Clock <b>${S.clock}/${WORLD.maxClock}</b> · Wreck <b>${S.wreck}</b>`;
   document.getElementById("scene").textContent = (S.ended? "—" : `— ${n.name} —\n${n.desc}`);
   const lg=document.getElementById("log");
   lg.innerHTML = S.log.slice(-80).map(e=>`<div class="e ${e.c}">${e.t}</div>`).join("");

@@ -1,0 +1,109 @@
+{
+  "world_id": "castaway",
+  "identity": {
+    "title": "The Wreck of the Meridian",
+    "tagline": "A castaway on a hostile shore. Loot the wreck before the sea takes it, then find a way to leave.",
+    "archetype": "Robinson Crusoe survival thriller (public domain, 1719) — also echoes CAST AWAY (2000)",
+    "engine": "poc/lighthouse-nl/index.html"
+  },
+  "constraints": [
+    "Ecology is self-consistent with an equatorial castaway island: reef, palms, mangroves, feral goats, seabirds, jungle cats, parrots, sharks. No cold/temperate or volcanic life.",
+    "SIGNAL vs CONCEAL: a signal (fire/pyre/light) raises rescue chance AND predator/wildlife attention; brighter signal = more of both. Staying dark and quiet is safe but unseen.",
+    "Wildlife is the antagonist: sharks in the water, night predators on land, storms at sea. The jungle cat and parrot can be tamed and turned to the player's use.",
+    "THE WRECK'S CLOCK: wreck integrity falls every turn (tide and weather). At 0 the wreck breaks up and its un-salvaged items are lost forever.",
+    "NIGHT falls on a cycle; warmth falls each night and is restored by fire or shelter. At warmth 0, life falls.",
+    "Each meaningful action advances the tide/clock one tick.",
+    "A locked connection or container requires its key item in inventory before it opens.",
+    "The player cannot leave the open ocean until a craft (raft or balloon) is built and launched, or until a rescue is triggered by signal.",
+    "Man Friday is omitted; the companion is a tamed jungle cat (hunting/scouting) and/or a tamed parrot (warning/messenger)."
+  ],
+  "lore_seed": [
+    { "id": "seed", "subject": "the Meridian", "relation": "is", "object": "a merchant brig wrecked on a reef off an uninhabited equatorial island", "tags": ["world","wreck","setting"] },
+    { "id": "you", "subject": "the player", "relation": "is", "object": "the sole survivor of the Meridian, washed ashore with nothing", "tags": ["player","survivor","lore"] },
+    { "id": "island", "subject": "the island", "relation": "is", "object": "a forested equatorial island with a reef, a jungle, a freshwater spring, and a high cliff", "tags": ["island","setting","ecology"] },
+    { "id": "wreckclock", "subject": "the wreck", "relation": "has", "object": "an integrity that falls each turn; at 0 it is gone and its cargo lost", "tags": ["wreck","rule","clock"] },
+    { "id": "signal", "subject": "a signal", "relation": "draws", "object": "both rescue (ships/planes) and predators (sharks, night hunters)", "tags": ["signal","rule","conceal"] },
+    { "id": "warmth", "subject": "night", "relation": "drains", "object": "warmth; fire or shelter restores it; at 0 warmth, life falls", "tags": ["night","warmth","rule"] },
+    { "id": "cat", "subject": "a jungle cat", "relation": "is", "object": "a wild predator that can be tamed with food; once tamed it hunts and scouts", "tags": ["cat","companion","wildlife"] },
+    { "id": "parrot", "subject": "a parrot", "relation": "is", "object": "a wild bird that can be tamed; once tamed it warns of ships and predators", "tags": ["parrot","companion","wildlife"] },
+    { "id": "paths", "subject": "escape", "relation": "may_be", "object": "by raft, by hot-air balloon, by signal rescue, or by enduring on the island", "tags": ["escape","ending","rule"] }
+  ],
+  "ecology": {
+    "_note": "Equatorial castaway island. LLM derives specifics from here; keep consistent with constraints.",
+    "climate": "hot, humid, trade-wind, violent squalls",
+    "terrain": ["reef", "shingle beach", "mangrove flat", "jungle interior", "freshwater spring", "basalt cliff"],
+    "flora": ["coconut palm", "mangrove", "breadfruit", "wild fig", "bamboo"],
+    "fauna": ["feral goat", "jungle cat", "parrot", "crab", "reef fish", "seabird", "shark"],
+    "threats": ["shark (water)", "night predator (land)", "squall (weather)", "starvation", "exposure"]
+  },
+  "story": {
+    "skeleton": "Crusoe: restless departure -> wreck -> salvage -> mastery of the island -> companion -> multiple endings (rescue / self-sufficient / perish). CAST AWAY parallel: the wreck, the companion object, the raft, the signal fire.",
+    "omitted": "Man Friday human plotline omitted per design; replaced by tamed wildlife companions.",
+    "beats": [
+      "ORDINARY WORLD: you sailed against better judgment; the brig Meridian founders on the reef.",
+      "CALL/THRESHOLD: you wash ashore alone; the wreck groans on the reef, already breaking up.",
+      "TESTS (the Wreck's Clock): salvage tools, sailcloth, provisions, a rifle, a waterproof radio before the sea takes it.",
+      "ALLIES: tame the jungle cat (hunting) and the parrot (warning) instead of a human companion.",
+      "ORDEAL: the first night, the squall, the shark in the shallows, starvation pressure.",
+      "REWARD/MASTERY: a shelter, a signal pyre, a raft — you can now choose HOW to leave.",
+      "RETURN (endings): rescue by ship, sail the raft, ascend in a balloon, or make the island home."
+    ],
+    "story_gaps": {
+      "why_the_meridian_sailed": "TODO: cargo? exile? a foolish bet? (player backstory)",
+      "the_cat_name": "TODO: player names the cat (LLM should ask/accept a name)",
+      "the_parrot_name": "TODO: player names the parrot",
+      "what_was_in_the_radio": "TODO: a working frequency? a last message from another survivor?",
+      "the_island_history": "TODO: was it ever inhabited? a wreck before yours? (easter-egg lore)"
+    }
+  },
+  "map": {
+    "start": "beach",
+    "max_clock": 16,
+    "nodes": {
+      "beach":      { "name": "Shingle Beach", "desc": "Where the sea spat you out. The Meridian lies broken on the reef, a hundred yards out. The jungle waits inland.", "exits": { "west": "tide_pools", "north": "jungle", "east": "wreck_shore", "up": "cliff" } },
+      "wreck_shore":{ "name": "Wreck Shore", "desc": "At low light you can wade toward the Meridian's hull. She is breaking up fast.", "exits": { "west": "beach" }, "salvage": true },
+      "tide_pools": { "name": "Tide Pools", "desc": "Rock pools thick with crabs and shellfish; a seep of fresh water filters down.", "exits": { "east": "beach" }, "items": ["crab", "fresh_water"], "forage": "food" },
+      "jungle":     { "name": "Jungle Interior", "desc": "Close, green, loud with birds. Feral goats browse; something with yellow eyes watches from the figs.", "exits": { "south": "beach", "east": "spring", "north": "cliff" }, "items": ["goat_meat", "fig", "bamboo"], "cat_home": true },
+      "spring":     { "name": "Freshwater Spring", "desc": "Cold sweet water wells from the rock. Life, here.", "exits": { "west": "jungle" }, "items": ["fresh_water"], "forage": "water" },
+      "cliff":      { "name": "The Cliff", "desc": "A high bare promontory. From here you can see the whole reef — and be seen. A dead tree waits for a pyre.", "exits": { "south": "jungle", "down": "beach" }, "build": "pyre", "parrot_home": true },
+      "cove":       { "name": "Sheltered Cove", "desc": "Calm water between two headlands. The place to build and launch a craft.", "exits": { "south": "beach" }, "build": "raft" },
+      "camp":       { "name": "Your Camp", "desc": "A lean-to of palms and sailcloth you raised. Safe at night if the fire holds.", "exits": { "south": "beach" }, "build": "shelter" }
+    },
+    "containers": {
+      "wreck": { "name": "The Meridian (wreck)", "key": null,
+        "holds": { "tools": "a hatchet, a knife, rope", "sailcloth": "canvas from the fallen sail", "provisions": "hardtack, a jar of rum", "rifle": "a sodden musket and shot", "radio": "a waterproof wireless set" },
+        "note": "Each salvage action pulls one category and costs wreck integrity. Once integrity hits 0 the wreck is gone." }
+    },
+    "items": {
+      "tools":    { "name": "tools", "desc": "hatchet, knife, rope — the means to build." },
+      "sailcloth":{ "name": "sailcloth", "desc": "canvas; shelters, sails, balloon envelope." },
+      "provisions":{"name": "provisions", "desc": "hardtack and a jar of rum; staves off starvation, briefly." },
+      "rifle":    { "name": "musket", "desc": "sodden but serviceable; a noise that scares predators, a tool to hunt." },
+      "radio":    { "name": "waterproof radio", "desc": "a wireless set — if you can power and tune it, someone may answer." },
+      "crab":     { "name": "crab", "desc": "a tide-pool crab; food." },
+      "goat_meat":{ "name": "goat meat", "desc": "feral goat; real sustenance." },
+      "fig":      { "name": "fig", "desc": "wild fig; food and water." },
+      "bamboo":   { "name": "bamboo", "desc": "strong, light; raft and frame material." },
+      "fresh_water":{ "name": "fresh water", "desc": "the difference between life and the sun." }
+    }
+  },
+  "companions": {
+    "cat":    { "name": "the jungle cat", "home": "jungle", "tame_item": "goat_meat", "effect": "once tamed: passive food (hunts), scouts and warns of land predators" },
+    "parrot": { "name": "the parrot", "home": "cliff", "tame_item": "fig", "effect": "once tamed: warns of approaching ships (rescue) and predators; can repeat observations" }
+  },
+  "puzzles": [
+    { "id": "wreck_salvage", "rule": "salvage pulls one cargo category; each turn wreck integrity falls; at 0 wreck lost", "enforced_by": "engine.salvage" },
+    { "id": "raft_build", "rule": "raft requires tools + sailcloth + bamboo at the cove", "enforced_by": "engine.build" },
+    { "id": "pyre_signal", "rule": "signal meter raised by feeding the pyre; raises rescue AND predator attention", "enforced_by": "engine.signal" },
+    { "id": "tame_cat", "rule": "cat tamed by giving goat_meat at the jungle", "enforced_by": "engine.tame" },
+    { "id": "tame_parrot", "rule": "parrot tamed by giving fig at the cliff", "enforced_by": "engine.tame" },
+    { "id": "radio_rescue", "rule": "radio + signal high may trigger ship rescue", "enforced_by": "engine.signal" }
+  ],
+  "endings": [
+    { "id": "rescue_ship", "condition": "signal >= 8 AND (has radio OR parrot warned of ship) AND clock not expired", "tone": "good", "label": "A SAIL ON THE HORIZON" },
+    { "id": "raft_escape", "condition": "raftBuilt AND launch", "tone": "good", "label": "THE OPEN OCEAN" },
+    { "id": "balloon", "condition": "balloonBuilt AND launch", "tone": "bittersweet", "label": "INTO THE CLOUDS" },
+    { "id": "endure", "condition": "survive to clock >= max AND life > 0 AND shelter built", "tone": "bittersweet", "label": "THE ISLAND IS HOME" },
+    { "id": "perish", "condition": "life <= 0", "tone": "bad", "label": "THE SEA KEEPS YOU" }
+  ]
+}

@@ -47,7 +47,4 @@ narrates the one the engine selects.
 
 ## Status of the Gray Light world
 
-`openspec/world/graylight.json` currently encodes the POC's rules + map. The `lore_seed`
-and `ecology` sections contain a skeleton with explicit `TODO` gaps for you to fill in the
-starting storyline (the island's history, the keepers, the nature of the rift). The engine
-reads `constraints` today; `ecology` and richer `lore_seed` are the next layer to wire.
+`openspec/world/castaway.json` currently encodes the POC's rules + map. 

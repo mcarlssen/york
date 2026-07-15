@@ -28,7 +28,7 @@ openspec/
 
 ## Authoring a world (for the user)
 
-Open `openspec/world/graylight.json`. The schema is self-describing; the `story_gaps`
+Open `openspec/world/castaway.json`. The schema is self-describing; the `story_gaps`
 section is a checklist of starting-world-story questions to answer (origin of the rift, the
 first/last keeper, Keeper-9's nature, the island's kind, etc.). Fill those in; the engine
 will surface them through journals and the LLM will stay consistent with them via the
