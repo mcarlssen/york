@@ -79,7 +79,7 @@ function extractJSON(raw) {
 async function semanticConflict(text, ctx) {
   const key = process.env.OPENROUTER_API_KEY;
   if (!key) return null;
-  const model = process.env.LORE_VALIDATOR_MODEL || "openai/gpt-4o-mini";
+  const model = process.env.LORE_VALIDATOR_MODEL || "nvidia/nemotron-3-ultra-550b-a55b:free";
   const sys = `You are a world-consistency validator. Given an ESTABLISHED world (rules + facts) ` +
     `and a CANDIDATE fact, decide whether the candidate contradicts the established world. ` +
     `Answer ONLY JSON: {"conflict": true|false, "why": "short reason or empty"}. ` +

@@ -768,7 +768,7 @@ function offlineParse(text){
 // Whitelisted model: most reliable free slug for JSON action parsing (see model sweep).
 // Falls back to offline parser if this is unavailable / key absent. OpenRouter rotates
 // free models, so re-validate before shipping; the offline parser is the guaranteed floor.
-const LLM_MODEL = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free";
+const LLM_MODEL = "nvidia/nemotron-3-ultra-550b-a55b:free";
 
 async function callLLM(text){
   const key = (document.getElementById("apiKey").value||"").trim();
