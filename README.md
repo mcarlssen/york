@@ -139,9 +139,26 @@ That human judgment is the curator's job, and it never happens automatically:
 This is the boundary: players and the LLM propose; the engine + validator establish shared
 facts; only a curator promotes them to canon.
 
-### The rules the server enforces
+### One rule set, two enforcement points
 
-`api/lore.js` derives its checks from `world.json`'s `constraints`, not hardcoded strings:
+There are **not** two rule sets. The `constraints` array in `world.json` is the single source
+of truth, and both the engine and the server read the same document. The only difference is
+*which component can enforce which part*, because they have different context:
+
+- **The engine** (browser) holds the **live game state** — `S.flags.craftBuilt`, current
+  location, inventory, meters. So it alone can enforce **stateful** rules: "you can't leave
+  the island until the craft is built," "this lock needs its key in inventory," "night drains
+  warmth." These depend on *what is true right now*.
+- **The server** (`api/lore.js`) holds **no game state** — it only ever receives lore *facts*
+  (text nodes). It cannot know whether your craft is built or where you stand. So it can only
+  enforce **stateless** checks: does this fact contradict the world's fixed identity/ecology?
+
+So the server is not a second rule engine. It is a **guard over lore consistency**: it stops a
+player from injecting a fact that silently breaks the canon (e.g. "the island is frozen"),
+because a contradictory fact is the one way shared lore can corrupt the world. It does **not**
+evaluate game mechanics.
+
+What the server actually checks on each pushed node (derived from `world.json`, not hardcoded):
 
 - text must be non-empty and ≤ 400 chars;
 - no forbidden ecology/identity terms (for this equatorial world: cold/volcanic life such as
@@ -150,8 +167,22 @@ facts; only a curator promotes them to canon.
   server-assigned);
 - duplicate `id`, or text with Jaccard similarity > 0.75 to an existing node, is skipped.
 
-Stateful rules (e.g. "cannot leave until the craft is built") stay live in the engine; the
-server only blocks *static* ecology/identity contradictions.
+Stateful mechanics (craft-built, locks, night) remain the engine's job; the server only
+blocks *static* lore-vs-canon contradictions.
+
+### Lore vs. canon world rules
+
+Within `world.json`, two things are distinct and **both feed the game**, with rules sitting
+above lore in precedence (rules always win):
+
+- **Canon world rules** — `constraints`, `map`, `puzzles`, `endings`. The deterministic spine.
+  The engine enforces these live; the LLM obeys them.
+- **Lore** — `lore_seed`, `ecology`, and player-shared facts in the shared graph. The *content*
+  the world is made of. Lore is consumed as facts by both the engine and the LLM, but it never
+  overrides a rule.
+
+The shared-lore server guards the boundary between these two: it keeps lore consistent with
+the canon, and it never lets a lore fact become (or impersonate) a world rule.
 
 ### Storage
 
