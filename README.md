@@ -150,22 +150,29 @@ of truth, and both the engine and the server read the same document. The only di
   the island until the craft is built," "this lock needs its key in inventory," "night drains
   warmth." These depend on *what is true right now*.
 - **The server** (`api/lore.js`) holds **no game state** — it only ever receives lore *facts*
-  (text nodes). It cannot know whether your craft is built or where you stand. So it can only
-  enforce **stateless** checks: does this fact contradict the world's fixed identity/ecology?
+  (each stored as a lore node). It cannot know whether your craft is built or where you stand.
+  So it can only enforce **stateless** checks: does this fact contradict the world's fixed
+  identity/ecology?
 
 So the server is not a second rule engine. It is a **guard over lore consistency**: it stops a
 player from injecting a fact that silently breaks the canon (e.g. "the island is frozen"),
 because a contradictory fact is the one way shared lore can corrupt the world. It does **not**
 evaluate game mechanics.
 
-What the server actually checks on each pushed node (derived from `world.json`, not hardcoded):
+What the server actually checks on each pushed fact (stored as a lore *node*; we use
+"fact" for the content and "node" for the stored record):
 
-- text must be non-empty and ≤ 400 chars;
-- no forbidden ecology/identity terms (for this equatorial world: cold/volcanic life such as
-  `volcanic`, `glacier`, `polar`, `tundra`, `snow leopard`);
-- a client may **not** claim `spec` / `shared` / `canonical` as its `source` (those are
-  server-assigned);
-- duplicate `id`, or text with Jaccard similarity > 0.75 to an existing node, is skipped.
+- the fact's text must be non-empty and ≤ 400 chars;
+- the fact must **not conflict with existing canon** — its text must not contradict the
+  world's established ecology/identity. For this equatorial world that means no cold/volcanic
+  life (e.g. `volcanic`, `glacier`, `polar`, `tundra`, `snow leopard`); a cold world would
+  reject tropical life instead. The check is derived from `world.json`'s `constraints`, not a
+  fixed blacklist, and is currently a lightweight keyword heuristic rather than semantic
+  contradiction detection;
+- a client may **not** claim `spec` / `shared` / `canonical` as its `source` — those labels
+  are server-assigned;
+- a fact with a duplicate `id`, or whose text is > 0.75 similar (Jaccard) to an existing
+  node's text, is skipped as a near-duplicate.
 
 Stateful mechanics (craft-built, locks, night) remain the engine's job; the server only
 blocks *static* lore-vs-canon contradictions.
