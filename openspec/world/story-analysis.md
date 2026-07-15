@@ -1,6 +1,6 @@
 # Story analysis — survival-thriller PD anchors & core-loop derivation
 
-Source research for choosing the castaway world that now binds the Gray Light engine.
+Source research for choosing the castaway world that now binds the Meridian engine.
 
 ## Public-domain survival-thrillers considered
 
@@ -31,4 +31,4 @@ Source research for choosing the castaway world that now binds the Gray Light en
 4. Tame the Companion: bond vs. wild (cat hunts/scouts, parrot warns).
 
 The chosen build layers 1 (opening) -> 3/2 (midgame spine) -> 4 (companion texture) and lets
-the player pick the ending. See castaway.json for the bound implementation.
+the player pick the ending. See world.json for the bound implementation.

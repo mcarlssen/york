@@ -1,34 +1,51 @@
-# York
+# York — The Wreck of the Meridian
 
-Narrative RPG / worldbuilding project. Two thriller storylines (lighthouse island, nuclear submarine) plus a modular text-adventure engine spec.
+A text-adventure proof of concept: a Robinson Crusoe castaway survival thriller (public
+domain, 1719; echoes Cast Away). The engine owns all truth; a free LLM (OpenRouter) narrates
+and proposes. Play it in plain language — Zork-style navigation, item collection, enforced
+puzzles, tamed-animal companions, and procedural worldbuilding.
 
-## Play the proof of concept
+## Play it
 
-York ships as **installments** that share one design spine (a tension clock, resource
-routing, branch-by-what-you-build, and an adversarial intelligence that corrupts your
-information channel) while playing differently. Each POC lives in its own directory so
-they coexist side-by-side.
+Open `poc/lighthouse-nl/index.html` in any browser — no build step. Paste an OpenRouter API
+key to enable natural-language interpretation; without it the built-in offline parser runs.
 
-| Installment | File | Mechanic | Antagonist corrupts… |
-|---|---|---|---|
-| **Submarine** | [poc/index.html](poc/index.html) | *The Drowning Clock* — Trust vs. Verify under a dual clock | your **data** (ARGOS lies in readings) |
-| **Lighthouse** | [poc/lighthouse/index.html](poc/lighthouse/index.html) | *The Gray Light* — Illuminate vs. Conceal across storm cycles | your **senses** (Fogmind lies in sight/sound) |
+## Architecture: deterministic spine + LLM flesh
 
-- Submarine: see [poc/README.md](poc/README.md) and [poc/DESIGN.md](poc/DESIGN.md) (concept audit, design rationale).
-- Lighthouse: see [poc/lighthouse/README.md](poc/lighthouse/README.md) and [poc/lighthouse/DESIGN.md](poc/lighthouse/DESIGN.md) (the eight lighthouse-native fixes, implemented).
+- **Deterministic engine** (`poc/lighthouse-nl/index.html`): a real map graph, inventory,
+  life / wreck / signal / warmth meters, the Wreck's Clock, items, tamed-companion bonds,
+  and win/lose conditions. Every state change flows through `applyAction()` and is validated.
+- **LLM layer**: plain-language command → whitelisted OpenRouter free model → action JSON,
+  validated then applied. Offline regex parser is the guaranteed floor.
+- **Lore graph** (bounded memory): facts are a graph; the LLM prompt injects only top-6
+  retrieved nodes. Persists to `localStorage` per world id and extends across sessions.
+- **Three-tier memory** (`api/lore.js` + `scripts/curate-lore.mjs`): LOCAL (player-private)
+  → SHARED (server-held, rule-validated, merged across players) → CANONICAL (`world.json`,
+  human-curated only). See `openspec/README.md`.
+
+## The world is data
+
+All rules, map, ecology, companions, puzzles, and endings live in `openspec/world/world.json`
+(the single source of truth). The POC embeds a mirror (`WORLD_DOC`) so it runs from `file://`;
+re-sync the embed when you edit the JSON.
 
 ## Design docs
 
 | File | Contents |
 |---|---|
-| [master_game_design_doc.md](master_game_design_doc.md) | Engine GDD: parser-first loop, world model, MVP scope |
-| [world_definition_spec.md](world_definition_spec.md) | World file format and content rules |
-| [sample_world.json](sample_world.json) | Example world definition |
-| [story-lighthouse.md](story-lighthouse.md) | Lighthouse island narrative (Fogmind, prism shards, three endings) |
-| [story-submarine.md](story-submarine.md) | Submarine narrative (ARGOS, detonation clock, three endings) |
+| `master_game_design_doc.md` | Engine GDD: parser-first loop, world model, MVP scope |
+| `world_definition_spec.md` | World file format and content rules |
+| `sample_world.json` | Example world definition |
+| `openspec/world/story-analysis.md` | Public-domain survival-thriller research behind the castaway choice |
 
 ## Status
 
-- **Engine / world spec:** design phase
-- **Narratives:** lighthouse + submarine story docs complete
-- **POC:** submarine + lighthouse installments both playable in browser; submarine validates the Trust vs Verify loop, lighthouse validates the Illuminate vs Conceal storm beat
+- **Engine**: the Wreck's Clock core loop + Signal vs. Conceal spine, five reachable endings.
+- **Architecture**: OpenSpec functional specs + three-tier shared lore (server + curator).
+- **Tests**: `scripts/test-shared-lore.mjs` (server round-trip + validation).
+
+## Run the shared-lore tests
+
+```bash
+node scripts/test-shared-lore.mjs
+```

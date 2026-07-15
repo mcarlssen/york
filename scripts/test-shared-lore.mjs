@@ -33,18 +33,18 @@ function ok(cond, name) { if (cond) { pass++; console.log("  PASS", name); } els
 // --- 1. GET on empty graph -------------------------------------------------
 {
   const res = mkRes();
-  await handler(mkReq("GET", "http://x/api/lore?world=castaway"), res);
+  await handler(mkReq("GET", "http://x/api/lore?world=meridian"), res);
   ok(res.statusCode === 200 && res.body.count === 0, "GET empty graph returns 0 nodes");
 }
 
-// --- 2. POST a valid castaway-ecology fact ---------------------------------
+// --- 2. POST a valid meridian-ecology fact ---------------------------------
 {
   const res = mkRes();
   const nodes = [{
     id: "p1", source: "play", text: "the jungle interior hides a fallen survival cache",
     tags: ["generated", "lore"], subject: "jungle", relation: "hides", object: "a survival cache",
   }];
-  await handler(mkReq("POST", "http://x/api/lore", { world: "castaway", nodes }), res);
+  await handler(mkReq("POST", "http://x/api/lore", { world: "meridian", nodes }), res);
   ok(res.statusCode === 200 && res.body.merged === 1 && res.body.rejected === 0,
      "POST valid fact is merged");
 }
@@ -54,7 +54,7 @@ function ok(cond, name) { if (cond) { pass++; console.log("  PASS", name); } els
   const res = mkRes();
   const nodes = [{ id: "p2", source: "play", text: "a glacier sits at the island's frozen core",
     tags: ["generated"], subject: "island", relation: "has", object: "a glacier" }];
-  await handler(mkReq("POST", "http://x/api/lore", { world: "castaway", nodes }), res);
+  await handler(mkReq("POST", "http://x/api/lore", { world: "meridian", nodes }), res);
   ok(res.statusCode === 200 && res.body.merged === 0 && res.body.rejected === 1,
      "POST cold/volcanic fact is rejected by ruleset");
 }
@@ -64,7 +64,7 @@ function ok(cond, name) { if (cond) { pass++; console.log("  PASS", name); } els
   const res = mkRes();
   const nodes = [{ id: "p1", source: "play", text: "the jungle interior hides a fallen survival cache",
     tags: ["generated"], subject: "jungle", relation: "hides", object: "a survival cache" }];
-  await handler(mkReq("POST", "http://x/api/lore", { world: "castaway", nodes }), res);
+  await handler(mkReq("POST", "http://x/api/lore", { world: "meridian", nodes }), res);
   ok(res.statusCode === 200 && res.body.merged === 0, "duplicate-by-id not re-merged");
 }
 
@@ -74,7 +74,7 @@ function ok(cond, name) { if (cond) { pass++; console.log("  PASS", name); } els
   // shares 8/10 tokens with the stored p1 text -> Jaccard 0.8 > 0.75 threshold
   const nodes = [{ id: "p3", source: "play", text: "the jungle interior hides a fallen survival cache near the spring",
     tags: ["generated"], subject: "jungle", relation: "hides", object: "a survival cache" }];
-  await handler(mkReq("POST", "http://x/api/lore", { world: "castaway", nodes }), res);
+  await handler(mkReq("POST", "http://x/api/lore", { world: "meridian", nodes }), res);
   ok(res.statusCode === 200 && res.body.merged === 0, "near-duplicate text not re-merged");
 }
 
@@ -83,14 +83,14 @@ function ok(cond, name) { if (cond) { pass++; console.log("  PASS", name); } els
   const res = mkRes();
   const nodes = [{ id: "p4", source: "spec", text: "the player is the sole survivor of the Meridian",
     tags: [], subject: "player", relation: "is", object: "survivor" }];
-  await handler(mkReq("POST", "http://x/api/lore", { world: "castaway", nodes }), res);
+  await handler(mkReq("POST", "http://x/api/lore", { world: "meridian", nodes }), res);
   ok(res.statusCode === 200 && res.body.rejected === 1, "forbidden source label rejected");
 }
 
 // --- 7. GET now reflects the one merged fact -------------------------------
 {
   const res = mkRes();
-  await handler(mkReq("GET", "http://x/api/lore?world=castaway"), res);
+  await handler(mkReq("GET", "http://x/api/lore?world=meridian"), res);
   ok(res.statusCode === 200 && res.body.count === 1 && res.body.nodes[0].source === "player",
      "GET reflects merged player fact");
 }
@@ -100,7 +100,7 @@ function ok(cond, name) { if (cond) { pass++; console.log("  PASS", name); } els
   // run curator against local fallback (no --api)
   const { execSync } = await import("node:child_process");
   let out = "";
-  try { out = execSync("node scripts/curate-lore.mjs castaway", { cwd: new URL("..", import.meta.url).pathname, encoding: "utf8" }); }
+  try { out = execSync("node scripts/curate-lore.mjs meridian", { cwd: new URL("..", import.meta.url).pathname, encoding: "utf8" }); }
   catch (e) { out = (e.stdout || "") + (e.stderr || ""); }
   console.log(out);
   const changeDir = new URL("../openspec/changes/" + new Date().toISOString().slice(0,10) + "-curate-shared-lore/", import.meta.url);

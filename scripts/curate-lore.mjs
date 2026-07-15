@@ -7,15 +7,15 @@
 // consistency, or tone — that is a human call. This script:
 //   1. fetches GET /api/lore?world=<world>  (or reads the local .cache file)
 //   2. diffs shared nodes against the canonical lore_seed + ecology
-//   3. emits candidate facts the curator can copy into castaway.json's lore_seed
+//   3. emits candidate facts the curator can copy into world.json's lore_seed
 //   4. writes an OpenSpec change (proposal + design + tasks + spec delta) so the
 //      promotion is reviewable as a PR, not a silent edit.
 //
 // Usage:  node scripts/curate-lore.mjs [world] [--api https://your-vercel.url]
-//   world defaults to "castaway". Without --api it reads .cache/shared-lore.json
+//   world defaults to "meridian". Without --api it reads .cache/shared-lore.json
 //   (the local fallback written by api/lore.js in dev).
 //
-// It does NOT auto-merge into castaway.json. Curators review the change, edit
+// It does NOT auto-merge into world.json. Curators review the change, edit
 // the world doc, and land the PR. That is the "curated, not crowd-written"
 // boundary of the three-tier architecture.
 
@@ -25,7 +25,7 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
-const WORLD = process.argv[2] || "castaway";
+const WORLD = process.argv[2] || "meridian";
 const apiIdx = process.argv.indexOf("--api");
 const API = apiIdx >= 0 ? process.argv[apiIdx + 1] : null;
 const DATE = new Date().toISOString().slice(0, 10);
@@ -66,7 +66,7 @@ function canonicalTexts(worldDoc) {
 }
 
 function loadWorldDoc() {
-  const worldPath = join(ROOT, "openspec", "world", `${WORLD}.json`);
+  const worldPath = join(ROOT, "openspec", "world", "world.json");
   if (!existsSync(worldPath)) throw new Error(`No canonical world doc at ${worldPath}`);
   return { worldDoc: JSON.parse(readFileSync(worldPath, "utf8")), worldPath };
 }
@@ -101,7 +101,7 @@ World: ${WORLD} (${worldDoc.identity && worldDoc.identity.title})
 The SHARED tier (api/lore.js) accumulates player-generated lore that has passed
 the ruleset. It is open and rule-checked but NOT vetted for quality, tone, or
 narrative fit. Canonical world truth must remain human-curated. This change
-proposes promoting the candidate facts below into \`${WORLD}.json\`'s \`lore_seed\`
+proposes promoting the candidate facts below into \`world.json\`'s \`lore_seed\`
 after curator review.
 
 ## Candidates (copied from shared graph — REVIEW before merging)
@@ -109,7 +109,7 @@ ${candidates.map((c, i) => `${i + 1}. [${c.tags ? c.tags.join(",") : ""}] ${c.te
 
 ## Process
 1. Curator reviews each candidate; rejects duplicates, low-quality, or off-tone facts.
-2. Accepted facts are appended to \`lore_seed\` in \`openspec/world/${WORLD}.json\`
+2. Accepted facts are appended to \`lore_seed\` in \`openspec/world/world.json\`
    with a fresh \`id\` and appropriate \`tags\`.
 3. This change is merged via PR; the shared graph is left intact (shared is the
    input, canon is the curated output — they do not collide).
@@ -121,7 +121,7 @@ Players and the LLM never write the canonical doc. Only this curator flow does.
   const tasks = `# Tasks — Curate Shared Lore (${WORLD})
 
 - [ ] Review each candidate fact for quality, tone, and consistency with constraints
-- [ ] Append accepted facts to \`lore_seed\` in \`openspec/world/${WORLD}.json\`
+- [ ] Append accepted facts to \`lore_seed\` in \`openspec/world/world.json\`
 - [ ] Assign fresh \`id\`s and \`tags\` to accepted facts
 - [ ] Land this change via PR (do NOT merge shared graph directly into canon)
 `;

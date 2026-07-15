@@ -19,11 +19,11 @@ import { fileURLToPath } from "node:url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // --- load the canonical world doc to derive the ruleset -------------------
+// The canonical world lives at openspec/world/world.json (single source of truth);
+// the `world` arg selects which shared graph to read/write, not which file to load.
 function loadWorld(world) {
-  // prefer the canonical doc; falls back to a bare skeleton if missing
   const candidates = [
-    join(__dirname, "..", "openspec", "world", `${world}.json`),
-    join(__dirname, "..", "poc", "world", `${world}.json`),
+    join(__dirname, "..", "openspec", "world", "world.json"),
   ];
   for (const c of candidates) {
     if (existsSync(c)) {
@@ -115,7 +115,7 @@ function similar(a, b) {
 
 export default async function handler(req, res) {
   const url = new URL(req.url, "http://localhost");
-  const world = url.searchParams.get("world") || "castaway";
+  const world = url.searchParams.get("world") || "meridian";
   const doc = loadWorld(world);
 
   if (req.method === "GET") {

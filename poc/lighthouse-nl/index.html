@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>YORK — Gray Light (NL)</title>
+<title>YORK — The Wreck of the Meridian</title>
 <style>
   :root{
     --bg:#06100c; --ink:#7dffb0; --dim:#3f7a5d; --bad:#ff6b6b; --warn:#ffd166;
@@ -74,8 +74,8 @@
 <body>
 <div id="app">
   <header>
-    <h1>YORK — GRAY LIGHT</h1>
-    <div class="sub">a keeper's island · speak in plain language · the engine owns the truth, the voice narrates it</div>
+    <h1>YORK — THE WRECK OF THE MERIDIAN</h1>
+    <div class="sub">a castaway's island · speak in plain language · the engine owns the truth, the voice narrates it</div>
   </header>
 
   <div class="api" id="apiBar">
@@ -102,7 +102,7 @@
       </div>
       <div class="keys">
         type in plain language · <kbd>Enter</kbd> to act · <kbd>R</kbd> restart ·
-        try <i>look</i>, <i>examine journal</i>, <i>ask Keeper-9 about the last keeper</i>
+        try <i>look</i>, <i>examine journal</i>, <i>what can I salvage from the wreck?</i>
       </div>
     </div>
     <div class="panel">
@@ -125,14 +125,14 @@
 
 /* ============================================================
    WORLD DOC — the single source of truth for this world.
-   Mirrors openspec/world/castaway.json (the authoring source). A POC
+   Mirrors openspec/world/world.json (the authoring source). A POC
    embeds a copy so it runs from file:// with no fetch/build step.
    The engine derives WORLD + SPEC from this; seedLore reads lore_seed
-   + ecology from it. Edit castaway.json to author the world, then
+   + ecology from it. Edit world.json to author the world, then
    re-sync this embed.
    ============================================================ */
 const WORLD_DOC = {
-  world_id: "castaway",
+  world_id: "meridian",
   identity: { title:"The Wreck of the Meridian", tagline:"A castaway on a hostile shore. Loot the wreck before the sea takes it — then decide how you leave.", engine:"poc/lighthouse-nl/index.html" },
   constraints: [
     "Ecology is self-consistent with an equatorial castaway island: reef, palms, mangroves, feral goats, seabirds, jungle cats, parrots, sharks. No cold/temperate or volcanic life.",
@@ -243,7 +243,7 @@ let LORE = null;          // persistent LoreGraph, loaded from storage or seeded
    prompt never bloats. Persisted per world id across sessions.
    ============================================================ */
 const LORE_STORE_KEY = "york_lore_v1";
-const WORLD_ID = "castaway";
+const WORLD_ID = "meridian";
 
 function LoreGraph(){
   this.nodes = {};        // id -> node
@@ -307,7 +307,7 @@ function seedLore(g, doc){
    LOCAL (localStorage) is this player's private, organic play.
    SHARED (server KV via /api/lore) is merged, rule-validated lore
    from all players; new players bootstrap from it. CANONICAL
-   (castaway.json in repo) is curated by a human; the LLM/players
+   (world.json in repo) is curated by a human; the LLM/players
    never write it. Only the curator promotes vetted shared facts.
    Push/pull are best-effort; the offline floor is unchanged.
    ============================================================ */
@@ -820,9 +820,9 @@ async function genLore(text){
   if(!key) return null;
   const ctx = text + " " + node().name;
   const relevant = LORE.retrieve(ctx, 5).map(n=>"- "+n.text).join("\n");
-  const sys = `You are the world-builder for York: Gray Light, a cold volcanic seabird islet besieged by a sentient storm (the Fogmind). `+
+  const sys = `You are the world-builder for York: The Wreck of the Meridian, a castaway on an equatorial island (reef, palms, mangroves, feral goats, seabirds, jungle cats, parrots, sharks). `+
     `Answer the player's question with ONE concise factual sentence about the world, consistent with these hard constraints and existing lore. `+
-    `Do NOT invent tropical life, magic, or anything contradicting the rules. Reply with ONLY the sentence, no preamble.\n`+
+    `Do NOT invent cold/volcanic life, magic, or anything contradicting the rules. Reply with ONLY the sentence, no preamble.\n`+
     `CONSTRAINTS: ${SPEC.constraints.join(" ")}\nEXISTING LORE:\n${relevant}`;
   try{
     const r = await fetch("https://openrouter.ai/api/v1/chat/completions",{
@@ -844,13 +844,13 @@ function validateNewPlace(prop){
   if(WORLD.nodes[prop.id]) return { ok:false, why:"a place by that name already exists" };
   // rule: no leaving the island until the craft is built/launched
   const low = (prop.desc||"").toLowerCase() + " " + (prop.name||"").toLowerCase();
-  if(/mainland|another island|open ocean|escape the island|leave gray light|distant shore|continent/.test(low)
+  if(/mainland|another island|open ocean|escape the island|distant shore|continent/.test(low)
      && !S.flags.craftBuilt){
     return { ok:false, why:"the rules forbid leaving the island until the craft is built and launched" };
   }
-  // rule: ecology self-consistency — reject obviously tropical/impossible descriptors
-  if(/jungle|palm|tropics|coral reef|equator/.test(low)){
-    return { ok:false, why:"that contradicts the cold volcanic island ecology" };
+  // rule: ecology self-consistency — reject obviously cold/volcanic/impossible descriptors
+  if(/volcanic|glacier|polar|tundra|permafrost|ice sheet|snow/.test(low)){
+    return { ok:false, why:"that contradicts the equatorial island ecology" };
   }
   return { ok:true };
 }
@@ -859,10 +859,10 @@ function validateNewPlace(prop){
 async function genPlace(query){
   const key = (document.getElementById("apiKey").value||"").trim();
   if(!key) return { ok:false, why:"no LLM key set" };
-  const sys = `You are expanding the map of York: Gray Light, a cold volcanic seabird islet. `+
+  const sys = `You are expanding the map of York: The Wreck of the Meridian, a castaway on an equatorial island (reef, palms, mangroves). `+
     `The player is at "${node().name}". Propose ONE new place the player could discover here, consistent with the rules. `+
-    `Return ONLY JSON: {"id":"snake_case_id","name":"Short Name","desc":"one sentence, cold volcanic islet, no tropics/magic","dirBack":"the exit key from the new place back to the current node (e.g. south)"}. `+
-    `Rules: ${SPEC.constraints.join(" ")} Do not propose leaving the island (no mainland/ocean escape) unless the boathouse craft is already built.`;
+    `Return ONLY JSON: {"id":"snake_case_id","name":"Short Name","desc":"one sentence, equatorial island, no cold/volcanic life or magic","dirBack":"the exit key from the new place back to the current node (e.g. south)"}. `+
+    `Rules: ${SPEC.constraints.join(" ")} Do not propose leaving the island (no mainland/ocean escape) unless the craft is already built.`;
   try{
     const r = await fetch("https://openrouter.ai/api/v1/chat/completions",{
       method:"POST",

@@ -7,7 +7,7 @@ LOCAL (localStorage, this player)      pullLore ─┐
 SHARED (KV /api/lore, all players)  <─pushLore─┘        │
         │  GET graph                                  │
         ▼                                             ▼
-scripts/curate-lore.mjs  ──>  OpenSpec change  ──>  PR  ──>  CANONICAL (castaway.json)
+scripts/curate-lore.mjs  ──>  OpenSpec change  ──>  PR  ──>  CANONICAL (world.json)
 ```
 - Players PROPOSE (push). Engine + /api/lore ESTABLISH shared facts. Curator promotes
   shared → canonical. The LLM never writes any tier; it only authors prose/facts the
@@ -37,7 +37,7 @@ scripts/curate-lore.mjs  ──>  OpenSpec change  ──>  PR  ──>  CANONIC
 - Diffs shared `player`-source nodes against canonical `lore_seed` + ecology text (0.75
   similarity threshold). Emits an OpenSpec change under `openspec/changes/<date>-curate-...`
   with `proposal.md`, `tasks.md`, `design.md`, a `world-rules` spec delta, and a
-  paste-ready `candidates.lore_seed.json`. Does NOT edit `castaway.json`.
+  paste-ready `candidates.lore_seed.json`. Does NOT edit `world.json`.
 
 ## Rules precedence across tiers
 Nothing in LOCAL, SHARED, or CANONICAL may contradict the ruleset. The engine enforces

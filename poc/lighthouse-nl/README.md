@@ -42,8 +42,8 @@ that spine you choose how to leave — or whether to stay.
 ## The world doc is canonical
 
 All world rules, map, ecology, companions, puzzles, and endings are authored in
-openspec/world/castaway.json. index.html embeds a copy (WORLD_DOC) so it runs from file://;
-re-sync the embed when you edit the JSON. Edit castaway.json to author the world.
+openspec/world/world.json. index.html embeds a copy (WORLD_DOC) so it runs from file://;
+re-sync the embed when you edit the JSON. Edit world.json to author the world.
 
 ## Controls (plain language)
 
@@ -65,13 +65,9 @@ Headless engine tests confirm: the Wreck's Clock ages to 0 and is lost; salvage 
 Wreck Shore and pulls cargo; raft, rescue, endure, and perish endings are all reachable;
 taming requires the right companion-item at the right place; eating restores life.
 
-## Relationship to the other POCs
+## Relationship to the engine
 
-| File | Style |
-|---|---|
-| ../index.html | Submarine — Trust vs. Verify |
-| ../lighthouse/index.html | Lighthouse — Illuminate vs. Conceal (allocation loop) |
-| index.html | Castaway — the Wreck's Clock + Signal vs. Conceal (natural language) |
-
-This installment is the prototype for the rules + LLM engine, now bound to the Crusoe story.
-The openspec/ tree holds the functional specs and the world document that govern it.
+This single POC is the prototype for the rules + LLM engine, bound to the Crusoe story.
+The openspec/ tree holds the functional specs and the world document (world.json) that
+govern it. The api/ and scripts/ directories provide the shared-lore server and curator
+path (three-tier memory: local → shared → canonical).

@@ -13,8 +13,7 @@ openspec/
     game-architecture/       # engine-owns-truth, LLM interpreter, rules precedence, memory
     world-rules/             # schema + contract for world documents
   world/                     # world data (the STORY, written into the rules)
-    castaway.json            # The Wreck of the Meridian — active castaway POC world doc
-    graylight.json           # Gray Light — lighthouse POC world doc (reference)
+    world.json              # The Wreck of the Meridian — active castaway POC world doc (canonical)
   changes/                   # change proposals with spec deltas
     2026-07-14-lore-graph-and-specs/
     2026-07-15-shared-lore/   # three-tier shared memory (local / shared / canonical)
@@ -44,7 +43,7 @@ every tier.
 
 ## Authoring a world (for the user)
 
-Open `openspec/world/castaway.json`. The schema is self-describing; the `story_gaps`
+Open `openspec/world/world.json`. The schema is self-describing; the `story_gaps`
 section is a checklist of starting-world-story questions to answer (why the Meridian sailed,
 the cat's name, what the radio carried, the island's history, etc.). Fill those in; the
 engine will surface them through journals and the LLM will stay consistent with them via the

@@ -45,6 +45,6 @@ Each ending SHALL be defined by a deterministic condition the engine evaluates (
 reaches peak with beam ≥ 5 → reignition). The LLM SHALL NOT decide endings; it only
 narrates the one the engine selects.
 
-## Status of the Gray Light world
+## Status of the Meridian world
 
-`openspec/world/castaway.json` currently encodes the POC's rules + map. 
+`openspec/world/world.json` currently encodes the POC's rules + map. 

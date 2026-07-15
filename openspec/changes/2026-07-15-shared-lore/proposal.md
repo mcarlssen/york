@@ -1,7 +1,7 @@
 # Three-Tier Shared Lore Memory
 
 Date: 2026-07-15
-Worlds affected: castaway (and any future world)
+Worlds affected: meridian (and any future world)
 
 ## Why
 Player-generated lore was trapped in `localStorage`: each player's discoveries were
