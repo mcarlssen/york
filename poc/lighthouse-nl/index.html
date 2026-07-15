@@ -122,12 +122,16 @@
 "use strict";
 
 /* ============================================================
-   WORLD SPEC — the rules the LLM must respect.
-   This is the "design" layer: the engine governs truth; the LLM
-   authors prose and proposes interactions, validated against this.
+   WORLD DOC — the single source of truth for this world.
+   Mirrors openspec/world/graylight.json (the authoring source). A POC
+   embeds a copy so it runs from file:// with no fetch/build step.
+   The engine derives WORLD + SPEC from this; seedLore reads lore_seed
+   + ecology from it. Edit graylight.json to author the world, then
+   re-sync this embed.
    ============================================================ */
-const SPEC = {
-  seed: "Gray Light: a volcanic basalt islet in a vast, cold ocean, besieged by a sentient storm called the Fogmind. You are the newest keeper of its lighthouse; the last keeper is missing.",
+const WORLD_DOC = {
+  world_id: "graylight",
+  identity: { title:"Gray Light", tagline:"A keeper's island besieged by a sentient storm.", installment:"lighthouse", engine:"poc/lighthouse-nl/index.html" },
   constraints: [
     "Ecology is self-consistent with a cold volcanic seabird island (auklets, storm-petrels, kelp, lichen, no tropical life).",
     "Light is both tool and beacon: the beam repels the Fogmind but draws its attention; brighter beam = more Fogmind interest.",
@@ -137,97 +141,74 @@ const SPEC = {
     "A locked connection requires its key item to be in inventory before travel is allowed.",
     "The player cannot fly, swim the open ocean, or leave the island until the boathouse craft is built and launched."
   ],
-  lore: {} // committed facts; LLM appends here as the world is established
+  lore_seed: [
+    { id:"seed",     subject:"Gray Light", relation:"is", object:"a volcanic basalt islet in a vast cold ocean", tags:["world","island","setting"] },
+    { id:"fogmind",  subject:"Fogmind",    relation:"is", object:"a sentient storm besieging the island", tags:["fogmind","antagonist","storm"] },
+    { id:"keeper",   subject:"the player", relation:"is", object:"the newest keeper of the lighthouse; the last keeper is missing", tags:["keeper","player","lore"] },
+    { id:"light",    subject:"light",      relation:"is", object:"both tool and beacon; brighter beam repels the Fogmind but draws its attention", tags:["beam","light","rule"] },
+    { id:"perception", subject:"the Fogmind", relation:"corrupts", object:"perception (phantom sights, false sounds, rerouted paths), not merely vision", tags:["fogmind","rule","perception"] },
+    { id:"lineage",  subject:"keepers",    relation:"are", object:"a lineage; each left a journal; the lighthouse's history is the threat", tags:["keeper","lore","rule"] },
+    { id:"time",     subject:"each meaningful action", relation:"advances", object:"the storm one tick; at storm 12 the peak breaks", tags:["storm","rule","time"] },
+    { id:"lockrule", subject:"a locked connection", relation:"requires", object:"its key item in inventory before travel", tags:["rule","lock"] },
+    { id:"noescape", subject:"the player", relation:"cannot", object:"leave the island until the boathouse craft is built and launched", tags:["rule","escape","craft"] }
+  ],
+  ecology: {
+    climate:"cold, wind-scoured, salt",
+    terrain:["basalt cliffs","shingle beach","tide pools","thin soil"],
+    flora:["kelp","rock lichen","saltgrass"],
+    fauna:["auklets","storm-petrels","crabs","anemones"]
+  },
+  map: {
+    start:"beach", max_storm:12,
+    nodes: {
+      beach:        { name:"Shingle Beach", desc:"Black basalt shingle. A cold sea hisses at your boots. Behind you, a cliff path climbs to the lighthouse; to one side, tide pools glitter.", exits:{ north:"cliff_path", west:"tide_pools" } },
+      tide_pools:   { name:"Tide Pools", desc:"Sheltered rock pools hold anemones and startled crabs. Among the wrack lies a rusted iron KEY, and a saltwater-damaged journal wrapped in oilcloth.", exits:{ east:"beach" }, items:["iron_key"], journal:"j_what" },
+      cliff_path:   { name:"Cliff Path", desc:"A worn switchback up the basalt. Halfway, a heavy iron door is set into the rock — the storm-cellar. It is locked.", exits:{ south:"beach", north:"tower_base", in:"storm_cellar", east:"watch_post" }, lock:{ dir:"in", key:"iron_key", lockedText:"The storm-cellar door is locked. An iron key would turn it." } },
+      watch_post:   { name:"Watch Post", desc:"A lean-to facing the sea. Inside, a brass TELESCOPE and a keeper's logbook. A path continues east to the chapel.", exits:{ west:"cliff_path", east:"chapel" }, items:["telescope"], journal:"j_tele" },
+      chapel:       { name:"Chapel of the Beacon", desc:"A low stone chapel. The altar holds a warm PRISM SHARD. A bell-rope hangs by the door. The crypt lies beneath, reached by a trapdoor.", exits:{ west:"watch_post", down:"crypt" }, items:["prism_shard"] },
+      crypt:        { name:"Crypt", desc:"Cold stone steps down to the keepers' tombs. One niche holds a leather journal and a brass KEY-TOKEN stamped with the lighthouse seal.", exits:{ up:"chapel" }, items:["brass_token"], journal:"j_echo" },
+      storm_cellar: { name:"Storm Cellar", desc:"A round vaulted room. A LEVER of black iron stands in the center; pulling it feeds the lighthouse lamp. A journal is bolted to the wall.", exits:{ out:"cliff_path" }, items:["lever"], journal:"j_fog" },
+      tower_base:   { name:"Lighthouse Base", desc:"The great lamp is dark. A spiral stair winds up to the lamp room. To the south, a boathouse clings to the rocks.", exits:{ south:"cliff_path", up:"lamp_room", south_west:"boathouse" } },
+      boathouse:    { name:"Boathouse", desc:"A half-ruined boathouse. Timbers and a fouled line lie within — enough to BUILD a small craft if you have the means. The open sea waits beyond.", exits:{ north_east:"tower_base" }, build:"craft" },
+      lamp_room:    { name:"Lamp Room", desc:"The dead lens looks out over a gray, churning horizon. From here the beam could be raised — if its power is fed from below.", exits:{ down:"tower_base" } }
+    },
+    journals: {
+      j_what:"Keeper-3: \"The fog spoke in my mother's voice today. I answered it. I will not do that again. If you read this — do not answer the fog.\"",
+      j_tele:"Keeper-7: \"Through the glass I saw the last keeper's boat circle the island nine times, then turn and sail INTO the light. No one sailed out. The sea does not give back.\"",
+      j_echo:"Keeper-9 (voice): \"I am the record, not the man. The man went down to the cellar and never came up. Pull the lever. Close what he opened.\"",
+      j_fog: "Keeper-5: \"The rift is not weather. It is a door the first keeper opened to see across the water. The beam holds it shut. Feed the lamp, keeper. Feed it, or we are all the fog.\""
+    },
+    items: {
+      iron_key:{name:"iron key", desc:"A rusted iron key, salt-eaten but sound."},
+      telescope:{name:"brass telescope", desc:"A keeper's telescope. Through it, the gray reveals what the eye cannot."},
+      prism_shard:{name:"prism shard", desc:"A warm shard of the original beacon-lens. It hums faintly."},
+      brass_token:{name:"brass key-token", desc:"Stamped with the lighthouse seal — authorizes the lamp."},
+      lever:{name:"black iron lever", desc:"Heavy. Pulling it feeds the lamp from the cellar."}
+    }
+  }
+};
+
+/* Derive the engine's WORLD + SPEC from the world doc. */
+function buildWorld(doc){
+  return {
+    start: doc.map.start,
+    maxStorm: doc.map.max_storm,
+    nodes: doc.map.nodes,
+    journals: doc.map.journals,
+    items: doc.map.items
+  };
+}
+const WORLD = buildWorld(WORLD_DOC);
+const SPEC = {
+  seed: (WORLD_DOC.identity.title+": "+WORLD_DOC.identity.tagline),
+  constraints: WORLD_DOC.constraints
 };
 
 /* ============================================================
-   DETERMINISTIC ENGINE — the spine.
+   DETERMINISTIC ENGINE — the spine (derived from WORLD_DOC).
    Map graph, inventory, life/storm/beam meters, locks, journals,
    puzzles, win/lose. The LLM never changes this directly.
    ============================================================ */
-const WORLD = {
-  start: "beach",
-  maxStorm: 12,
-  // nodes: description + connections. "lock" gates travel until key held.
-  nodes: {
-    beach: {
-      name: "Shingle Beach",
-      desc: "Black basalt shingle. A cold sea hisses at your boots. Behind you, a cliff path climbs to the lighthouse; to one side, tide pools glitter.",
-      exits: { north:"cliff_path", west:"tide_pools" }
-    },
-    tide_pools: {
-      name: "Tide Pools",
-      desc: "Sheltered rock pools hold anemones and startled crabs. Among the wrack lies a rusted iron KEY, and a saltwater-damaged journal wrapped in oilcloth.",
-      exits: { east:"beach" },
-      items: ["iron_key"],
-      journal: "j_what"
-    },
-    cliff_path: {
-      name: "Cliff Path",
-      desc: "A worn switchback up the basalt. Halfway, a heavy iron door is set into the rock — the storm-cellar. It is locked.",
-      exits: { south:"beach", north:"tower_base", in:"storm_cellar", east:"watch_post" },
-      lock: { dir:"in", key:"iron_key", lockedText:"The storm-cellar door is locked. An iron key would turn it." }
-    },
-    watch_post: {
-      name: "Watch Post",
-      desc: "A lean-to facing the sea. Inside, a brass TELESCOPE and a keeper's logbook. A path continues east to the chapel.",
-      exits: { west:"cliff_path", east:"chapel" },
-      items: ["telescope"],
-      journal: "j_tele"
-    },
-    chapel: {
-      name: "Chapel of the Beacon",
-      desc: "A low stone chapel. The altar holds a warm PRISM SHARD. A bell-rope hangs by the door. The crypt lies beneath, reached by a trapdoor.",
-      exits: { west:"watch_post", down:"crypt" },
-      items: ["prism_shard"]
-    },
-    crypt: {
-      name: "Crypt",
-      desc: "Cold stone steps down to the keepers' tombs. One niche holds a leather journal and a brass KEY-TOKEN stamped with the lighthouse seal.",
-      exits: { up:"chapel" },
-      items: ["brass_token"],
-      journal: "j_echo"
-    },
-    storm_cellar: {
-      name: "Storm Cellar",
-      desc: "A round vaulted room. A LEVER of black iron stands in the center; pulling it feeds the lighthouse lamp. A journal is bolted to the wall.",
-      exits: { out:"cliff_path" },
-      items: ["lever"],
-      journal: "j_fog"
-    },
-    tower_base: {
-      name: "Lighthouse Base",
-      desc: "The great lamp is dark. A spiral stair winds up to the lamp room. To the south, a boathouse clings to the rocks.",
-      exits: { south:"cliff_path", up:"lamp_room", south_west:"boathouse" }
-    },
-    boathouse: {
-      name: "Boathouse",
-      desc: "A half-ruined boathouse. Timbers and a fouled line lie within — enough to BUILD a small craft if you have the means. The open sea waits beyond.",
-      exits: { north_east:"tower_base" },
-      build: "craft" // requires prism_shard + lever to build; then 'launch' wins
-    },
-    lamp_room: {
-      name: "Lamp Room",
-      desc: "The dead lens looks out over a gray, churning horizon. From here the beam could be raised — if its power is fed from below.",
-      exits: { down:"tower_base" },
-      // raising the beam requires the lever pulled (cellar) — tracked via flags
-    }
-  },
-  // keeper journals — the lore, surfaced by exploration
-  journals: {
-    j_what:   "Keeper-3: \"The fog spoke in my mother's voice today. I answered it. I will not do that again. If you read this — do not answer the fog.\"",
-    j_tele:   "Keeper-7: \"Through the glass I saw the last keeper's boat circle the island nine times, then turn and sail INTO the light. No one sailed out. The sea does not give back.\"",
-    j_echo:   "Keeper-9 (voice): \"I am the record, not the man. The man went down to the cellar and never came up. Pull the lever. Close what he opened.\"",
-    j_fog:    "Keeper-5: \"The rift is not weather. It is a door the first keeper opened to see across the water. The beam holds it shut. Feed the lamp, keeper. Feed it, or we are all the fog.\""
-  },
-  items: {
-    iron_key:{name:"iron key", desc:"A rusted iron key, salt-eaten but sound."},
-    telescope:{name:"brass telescope", desc:"A keeper's telescope. Through it, the gray reveals what the eye cannot."},
-    prism_shard:{name:"prism shard", desc:"A warm shard of the original beacon-lens. It hums faintly."},
-    brass_token:{name:"brass key-token", desc:"Stamped with the lighthouse seal — authorizes the lamp."},
-    lever:{name:"black iron lever", desc:"Heavy. Pulling it feeds the lamp from the cellar."}
-  }
-};
 
 const ENDINGS = {
   reignition: ["THE BEACON REIGNITES", "good",
@@ -296,18 +277,18 @@ function loadLore(){
   return null;
 }
 
-function seedLore(g){
-  // seed the world bible from SPEC. The graph EXTENDS across sessions;
-  // seed only if these baseline nodes are absent.
-  if(!g.nodes["seed"]) g.commit("Gray Light","is","a volcanic basalt islet in a vast cold ocean",{id:"seed",source:"spec",tags:["world","island","setting"]});
-  if(!g.nodes["fogmind"]) g.commit("Fogmind","is","a sentient storm besieging the island",{id:"fogmind",source:"spec",tags:["fogmind","antagonist","storm"],link:"seed"});
-  if(!g.nodes["keeper"]) g.commit("the player","is","the newest keeper of the lighthouse; the last keeper is missing",{id:"keeper",source:"spec",tags:["keeper","player","lore"],link:"seed"});
-  if(!g.nodes["light"]) g.commit("light","is","both tool and beacon; brighter beam repels the Fogmind but draws its attention",{id:"light",source:"spec",tags:["beam","light","rule"],link:"fogmind"});
-  if(!g.nodes["perception"]) g.commit("the Fogmind","corrupts","perception (phantom sights, false sounds, rerouted paths), not merely vision",{id:"perception",source:"spec",tags:["fogmind","rule","perception"],link:"fogmind"});
-  if(!g.nodes["lineage"]) g.commit("keepers","are","a lineage; each left a journal; the lighthouse's history is the threat",{id:"lineage",source:"spec",tags:["keeper","lore","rule"],link:"keeper"});
-  if(!g.nodes["time"]) g.commit("each meaningful action","advances","the storm one tick; at storm 12 the peak breaks",{id:"time",source:"spec",tags:["storm","rule","time"]});
-  if(!g.nodes["lockrule"]) g.commit("a locked connection","requires","its key item in inventory before travel",{id:"lockrule",source:"spec",tags:["rule","lock"]});
-  if(!g.nodes["noescape"]) g.commit("the player","cannot","leave the island until the boathouse craft is built and launched",{id:"noescape",source:"spec",tags:["rule","escape","craft"]});
+function seedLore(g, doc){
+  doc = doc || WORLD_DOC;
+  // baseline lore_seed facts (idempotent by id)
+  for(const e of (doc.lore_seed||[])){
+    if(!g.nodes[e.id]) g.commit(e.subject, e.relation, e.object, { id:e.id, source:"spec", tags:e.tags||[], link:e.link });
+  }
+  // ecology becomes retrievable lore so the LLM answers environment questions consistently
+  const eco = doc.ecology || {};
+  if(eco.climate && !g.nodes["eco_climate"]) g.commit("the climate","is",eco.climate,{id:"eco_climate",source:"spec",tags:["ecology","climate"]});
+  for(const t of (eco.terrain||[])) if(!g.nodes["eco_terr_"+t]) g.commit("terrain includes", t, "", {id:"eco_terr_"+t,source:"spec",tags:["ecology","terrain",t.toLowerCase().replace(/[^a-z]/g,"")]});
+  for(const f of (eco.flora||[]))    if(!g.nodes["eco_flora_"+f]) g.commit("flora includes", f, "", {id:"eco_flora_"+f,source:"spec",tags:["ecology","flora",f.toLowerCase().replace(/[^a-z]/g,"")]});
+  for(const fa of (eco.fauna||[]))   if(!g.nodes["eco_fauna_"+fa]) g.commit("fauna includes", fa, "", {id:"eco_fauna_"+fa,source:"spec",tags:["ecology","fauna",fa.toLowerCase().replace(/[^a-z]/g,"")]});
 }
 
 function newGame(){
@@ -321,8 +302,7 @@ function newGame(){
   };
   // load persistent lore graph if present (extends across sessions), else seed
   LORE = loadLore() || new LoreGraph();
-  if(!LORE.nodes["seed"]) seedLore(LORE);
-  else seedLore(LORE); // idempotent: only adds absent baseline nodes
+  seedLore(LORE, WORLD_DOC); // idempotent: only adds absent baseline nodes
   S.visited[S.loc]=true;
   pushLog("You wash up on the Shingle Beach of Gray Light, the last keeper alive. The storm is a wall on the horizon.","sys");
   pushLog("Keeper-9: \"Speak plainly, keeper. The island listens, and so do I.\"","fog");
@@ -385,6 +365,7 @@ function applyAction(a){
     case "read": return doRead(a.target);
     case "build": return doBuild();
     case "launch": return doLaunch();
+    case "discover": return doDiscover();
     case "wait": return doWait();
     default: return {ok:false, text:"The keeper's log does not record that action."};
   }
@@ -418,8 +399,17 @@ function doExamine(t){
   // items in inv
   const itemInv = S.inv.find(i=>itemName(i).toLowerCase().includes(tgt));
   if(itemInv) return {ok:true, text:WORLD.items[itemInv].desc, cls:"good"};
-  // the place / feature
+  // the place / feature — if it names something not obviously here, let the LLM
+  // generate a consistent ecological/lore fact about it (e.g. "examine the birds")
+  if(tgt.length>2 && !/here|room|place|around|surroundings/.test(tgt)){
+    return {ok:true, text:`You study ${t}.`, cls:"good", pendingGen:{type:"lore", query:"Describe "+t+" on Gray Light, a cold volcanic seabird islet besieged by the Fogmind."}};
+  }
   return {ok:true, text:`You study ${t}. ${n.desc}`, cls:"good"};
+}
+
+// Discover a new place adjacent to the current node (procedural map expansion).
+function doDiscover(){
+  return {ok:true, text:`You search for what else the island hides here.`, cls:"fog", pendingGen:{type:"place", query:null}};
 }
 
 function doGo(t){
@@ -514,6 +504,10 @@ function doAsk(t, say){
       ans += "\"I am the record, not the man. Explore. Read what the keepers left. The island tells its own history.\"";
     return {ok:true, text:ans, cls:"fog"};
   }
+  // unknown question about the world -> let the LLM generate a consistent fact (if key set)
+  if(say && (say.match(/\?$/)||/what|who|why|how|where|tell me|describe|ecology|animal|plant|bird|creature|history/.test(say))){
+    return {ok:true, text:`You pose the question to the gray.`, cls:"fog", pendingGen:{type:"lore", query:say}};
+  }
   return {ok:true, text:`You call into the gray. Only the wind answers — and something in it memorizes your voice.`, cls:"fog"};
 }
 
@@ -581,6 +575,7 @@ const ACTION_VERB = {
   ask:["ask","tell","question","say","speak"],
   build:["build","construct","make","craft","lash"],
   launch:["launch","flee","sail","escape","leave the island"],
+  discover:["discover","explore","search for","find new","delve","probe"],
   look:["look","describe","where","what can i see","survey","scan"],
   wait:["wait","rest","hold","pause","stay"]
 };
@@ -598,6 +593,7 @@ function offlineParse(text){
     for(const v of verbs){
       if(t.startsWith(v+" ")||t===v||(" "+t).includes(" "+v+" ")){
         let rest=t.slice(t.indexOf(v)+v.length).replace(/^( me | the | a | an | to | towards | into | in | up | down | north | south | east | west | at )+/g,"").trim();
+        if(act==="discover") return {action:"discover", target:null, item:null, say:text};
         return {action:act, target:rest||null, item:rest||null, say:text};
       }
     }
@@ -651,6 +647,86 @@ function extractJSON(raw){
   try{ return JSON.parse(s); }catch(e){ return null; }
 }
 
+/* ============================================================
+   PROCEDURAL LAYER — the LLM generates world content, the engine
+   validates it against the ruleset before committing. This is the
+   "rules by which the world is governed" in action: the model may
+   PROPOSE, but only the engine may ESTABLISH.
+   ============================================================ */
+
+// Generate a single consistent world fact (ecology/lore) answering `text`.
+async function genLore(text){
+  const key = (document.getElementById("apiKey").value||"").trim();
+  if(!key) return null;
+  const ctx = text + " " + node().name;
+  const relevant = LORE.retrieve(ctx, 5).map(n=>"- "+n.text).join("\n");
+  const sys = `You are the world-builder for York: Gray Light, a cold volcanic seabird islet besieged by a sentient storm (the Fogmind). `+
+    `Answer the player's question with ONE concise factual sentence about the world, consistent with these hard constraints and existing lore. `+
+    `Do NOT invent tropical life, magic, or anything contradicting the rules. Reply with ONLY the sentence, no preamble.\n`+
+    `CONSTRAINTS: ${SPEC.constraints.join(" ")}\nEXISTING LORE:\n${relevant}`;
+  try{
+    const r = await fetch("https://openrouter.ai/api/v1/chat/completions",{
+      method:"POST",
+      headers:{"Authorization":`Bearer ${key}`,"Content-Type":"application/json","HTTP-Referer":"http://localhost"},
+      body: JSON.stringify({model:LLM_MODEL, max_tokens:120, messages:[{role:"system",content:sys},{role:"user",content:text}]})
+    });
+    if(!r.ok) return null;
+    const d = await r.json();
+    const c = (d.choices&&d.choices[0]&&d.choices[0].message&&(d.choices[0].message.content||"")).trim();
+    return c || null;
+  }catch(e){ return null; }
+}
+
+// The engine's validator: a proposed new place must respect the rules before it is added.
+function validateNewPlace(prop){
+  // prop: {id, name, desc, dirBack} — dirBack is the exit key from the new node back to current
+  if(!prop || !prop.id || !prop.name) return { ok:false, why:"incomplete proposal" };
+  if(WORLD.nodes[prop.id]) return { ok:false, why:"a place by that name already exists" };
+  // rule: no leaving the island until the craft is built/launched
+  const low = (prop.desc||"").toLowerCase() + " " + (prop.name||"").toLowerCase();
+  if(/mainland|another island|open ocean|escape the island|leave gray light|distant shore|continent/.test(low)
+     && !S.flags.craftBuilt){
+    return { ok:false, why:"the rules forbid leaving the island until the craft is built and launched" };
+  }
+  // rule: ecology self-consistency — reject obviously tropical/impossible descriptors
+  if(/jungle|palm|tropics|coral reef|equator/.test(low)){
+    return { ok:false, why:"that contradicts the cold volcanic island ecology" };
+  }
+  return { ok:true };
+}
+
+// Generate a new place adjacent to the current node, validated before adding.
+async function genPlace(query){
+  const key = (document.getElementById("apiKey").value||"").trim();
+  if(!key) return { ok:false, why:"no LLM key set" };
+  const sys = `You are expanding the map of York: Gray Light, a cold volcanic seabird islet. `+
+    `The player is at "${node().name}". Propose ONE new place the player could discover here, consistent with the rules. `+
+    `Return ONLY JSON: {"id":"snake_case_id","name":"Short Name","desc":"one sentence, cold volcanic islet, no tropics/magic","dirBack":"the exit key from the new place back to the current node (e.g. south)"}. `+
+    `Rules: ${SPEC.constraints.join(" ")} Do not propose leaving the island (no mainland/ocean escape) unless the boathouse craft is already built.`;
+  try{
+    const r = await fetch("https://openrouter.ai/api/v1/chat/completions",{
+      method:"POST",
+      headers:{"Authorization":`Bearer ${key}`,"Content-Type":"application/json","HTTP-Referer":"http://localhost"},
+      body: JSON.stringify({model:LLM_MODEL, max_tokens:200, messages:[{role:"system",content:sys},{role:"user",content:query||"What is there to discover here?"}]})
+    });
+    if(!r.ok) return { ok:false, why:"LLM unavailable" };
+    const d = await r.json();
+    const raw = (d.choices&&d.choices[0]&&d.choices[0].message&&(d.choices[0].message.content||""));
+    const prop = extractJSON(raw);
+    if(!prop) return { ok:false, why:"could not parse the proposed place" };
+    // engine validates against the ruleset
+    const v = validateNewPlace(prop);
+    if(!v.ok) return v;
+    // add the node, linked back to current location
+    const dirBack = prop.dirBack || "back";
+    const exitKey = "discover_"+prop.id;
+    WORLD.nodes[prop.id] = { name:prop.name, desc:prop.desc||"", exits:{ [dirBack]: S.loc } };
+    WORLD.nodes[S.loc].exits[exitKey] = prop.id;
+    commitLore("place:"+prop.id, `${prop.name}: ${prop.desc||""}`, { id:"place_"+prop.id, tags:["place","generated"] });
+    return { ok:true, prop, exitKey };
+  }catch(e){ return { ok:false, why:"error" }; }
+}
+
 /* ---- the public turn: NL -> parse -> validate -> apply -> narrate ---- */
 async function playerTurn(text){
   if(S.ended) return;
@@ -669,8 +745,28 @@ async function playerTurn(text){
   pushLog(res.text, res.cls||"sys");
 
   if(res.lore) commitLore("turn:"+(S.log.length), res.lore);
-  // small storm pressure noise so passive play still ticks
-  if(!S.ended && res.ok) render();
+
+  // procedural layer: the engine asked the LLM to generate world content
+  if(res.pendingGen && !S.ended){
+    if(res.pendingGen.type==="lore"){
+      const fact = await genLore(res.pendingGen.query);
+      if(fact){
+        pushLog(fact, "llm");
+        commitLore("gen:"+(LORE.seq+1), fact, {tags:["generated","lore"]});
+      } else {
+        pushLog("The gray offers no answer you can trust. (Set an OpenRouter key for the LLM to weave the world.)","sys");
+      }
+    } else if(res.pendingGen.type==="place"){
+      const gp = await genPlace(res.pendingGen.query);
+      if(gp.ok){
+        pushLog(`You uncover ${gp.prop.name}. ${gp.prop.desc||""} (go: ${gp.exitKey})`, "llm");
+        render();
+      } else {
+        pushLog("You find nothing new — or the rules forbid it: "+gp.why+".", "warn");
+      }
+    }
+  }
+
   if(!S.ended) render();
   window.scrollTo(0,0);
 }
@@ -696,7 +792,7 @@ function render(){
   // suggestions
   const sg=document.getElementById("sug");
   const sugs = S.ended? [] :
-    ["look","examine journal","ask Keeper-9 about the last keeper","walk north","take the iron key","read the journal"];
+    ["look","examine journal","ask Keeper-9 about the last keeper","discover what else is here","what birds live on this island?","walk north","take the iron key","read the journal"];
   sg.innerHTML="";
   for(const s of sugs){ const b=document.createElement("button"); b.textContent=s; b.onclick=()=>runCmd(s); sg.appendChild(b); }
 }

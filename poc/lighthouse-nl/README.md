@@ -39,29 +39,51 @@ The behavioral contract (engine-owns-truth, LLM interpreter, precedence, bounded
 persistence) is captured as reviewable specs in [`../../openspec/specs/`](../../openspec/specs/),
 and the Gray Light **world rules + story** are authored in
 [`../../openspec/world/graylight.json`](../../openspec/world/graylight.json). Author the
-starting storyline by filling the `story_gaps` section there. The engine's in-file `SPEC` is
-a seed mirror; the `openspec/` tree is the source of truth for guidelines.
+starting storyline by filling the `story_gaps` section there.
+
+**The world document is the source of truth.** `index.html` embeds a copy of `graylight.json`
+as `WORLD_DOC` and derives its `WORLD` (map/nodes/journals/items) and `SPEC` (constraints)
+from it via `buildWorld()`. `seedLore()` reads `lore_seed` **and `ecology`** from that doc, so
+the climate/terrain/flora/fauna become retrievable lore nodes — the LLM answers environment
+questions consistently with the committed world. Edit `graylight.json` to author the world,
+then re-sync the embedded copy (a POC embeds it so it runs from `file://` with no fetch step).
+
+## Procedural generation (the LLM proposes, the engine establishes)
+
+The engine can grow the world at play, but only under rules precedence:
+
+- **Lore facts** — `examine <unknown thing>` or `ask` about the world (non-Keeper-9) flags a
+  pending generation; `genLore()` asks the LLM for ONE consistent fact respecting
+  `constraints` + retrieved lore, and the engine commits it to the graph (retrievable after).
+- **New places** — `discover` / `explore` flags a pending place; `genPlace()` has the LLM
+  propose a node adjacent to your location, then `validateNewPlace()` checks it against the
+  ruleset **before** adding: it rejects leaving the island before the craft is built, tropical
+  ecology on a cold islet, or duplicate ids. Valid places are linked back to your location and
+  become traversable. The LLM may PROPOSE; only the engine may ESTABLISH.
+
+This is the "rules by which the world is governed" in action: generation is bounded by the
+same constraints that govern hand-authored content.
 
 ## The world spec (rules the LLM must respect)
 
-Lives in `SPEC` at the top of `index.html`. It is a small design document:
+The engine derives `WORLD` (map/nodes/journals/items) and `SPEC` (constraints) from the
+embedded `WORLD_DOC` (a copy of `openspec/world/graylight.json`). The `constraints` array is
+the ruleset the LLM is given with every call and that `validateNewPlace` enforces:
 
-```js
-const SPEC = {
-  seed: "Gray Light: a volcanic basalt islet in a vast, cold ocean, besieged by a
-         sentient storm called the Fogmind. You are the newest keeper of its
-         lighthouse; the last keeper is missing.",
-  constraints: [ /* ecology self-consistency, light-as-beacon, Fogmind corrupts
-                   perception, keepers are a lineage, time costs, locks need keys,
-                   no leaving until the craft is built... */ ],
-  lore: {} // committed facts; the LLM appends here as the world is established
-};
+```
+- Ecology is self-consistent with a cold volcanic seabird island (no tropical life).
+- Light is both tool and beacon: the beam repels the Fogmind but draws its attention.
+- The Fogmind corrupts perception (phantom sights, false sounds, rerouted paths).
+- Keepers are a lineage; each left a journal.
+- Each meaningful action advances the storm one tick; at storm 12 the peak breaks.
+- A locked connection requires its key item in inventory before travel.
+- The player cannot leave the island until the boathouse craft is built and launched.
 ```
 
 This is exactly the "rules by which the world is governed" you described. The LLM is given
-the constraints and the current committed lore with every call, so its proposals stay
+the constraints and the current retrieved lore with every call, so its proposals stay
 consistent and it can grow the lore (e.g. establishing what *kind* of island this is and
-keeping that in memory).
+keeping that in memory) — but only after the engine validates them.
 
 ## The map (Zork-style)
 

@@ -27,3 +27,25 @@ The lore graph SHALL persist per world id and extend (not reset) on new game.
 ### Requirement: Model selection is pinned but replaceable
 The LLM model SHALL be a single configurable identifier; the offline parser is the guaranteed
 floor and SHALL never be removed.
+
+### Requirement: World document is the source of truth
+The world's rules, map, lore seed, and ecology SHALL be defined in a single world document
+(`openspec/world/<id>.json`) and loaded by the engine to derive state. The LLM SHALL read
+`constraints` + retrieved lore from it to stay consistent.
+
+### Requirement: Procedural generation is validated, not trusted
+When the LLM proposes new world content (a fact, or a new map node), the engine SHALL
+validate the proposal against the ruleset before committing it. A proposed place that would
+violate a hard rule (e.g. leaving the island before the craft is built, or tropical ecology
+on a cold islet) SHALL be rejected by the engine even if the LLM returned it. The LLM may
+PROPOSE; only the engine may ESTABLISH.
+
+#### Scenario: LLM proposes leaving the island pre-craft
+- GIVEN the boathouse craft is not built
+- WHEN the LLM proposes a new place that is "the mainland across open ocean"
+- THEN the engine SHALL reject it per the no-escape rule
+
+#### Scenario: LLM authors a world fact
+- GIVEN the player asks about unknown ecology
+- WHEN the LLM returns a single consistent fact
+- THEN the engine SHALL commit it to the lore graph (retrievable thereafter)
