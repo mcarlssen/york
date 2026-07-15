@@ -163,12 +163,17 @@ What the server actually checks on each pushed fact (stored as a lore *node*; we
 "fact" for the content and "node" for the stored record):
 
 - the fact's text must be non-empty and ≤ 400 chars;
-- the fact must **not conflict with existing canon** — its text must not contradict the
-  world's established ecology/identity. For this equatorial world that means no cold/volcanic
-  life (e.g. `volcanic`, `glacier`, `polar`, `tundra`, `snow leopard`); a cold world would
-  reject tropical life instead. The check is derived from `world.json`'s `constraints`, not a
-  fixed blacklist, and is currently a lightweight keyword heuristic rather than semantic
-  contradiction detection;
+- the fact must **not conflict with existing canon**. This is a **semantic** check, not a
+  keyword blacklist: the candidate fact is judged against the world's *established* facts
+  (the `constraints`, `lore_seed`, and `ecology` from `world.json`) to see whether it
+  asserts something impossible or contradictory in this world (e.g. a glacier calving into
+  an equatorial lagoon) — including contradictions that use none of the obvious banned
+  words. Implementation: when a server-side `OPENROUTER_API_KEY` is set, `api/lore.js` asks
+  an LLM (model `LORE_VALIDATOR_MODEL`, default `openai/gpt-4o-mini`) to classify the
+  candidate as `{ conflict: true|false, why }`. When no key is configured, it falls back to
+  the coarse keyword heuristic, so the check still runs offline (just less precisely). A
+  fact that merely adds new *consistent* detail (a new reef fish, a new tide pool) is **not**
+  a conflict and is accepted.
 - a client may **not** claim `spec` / `shared` / `canonical` as its `source` — those labels
   are server-assigned;
 - a fact with a duplicate `id`, or whose text is > 0.75 similar (Jaccard) to an existing
@@ -176,6 +181,11 @@ What the server actually checks on each pushed fact (stored as a lore *node*; we
 
 Stateful mechanics (craft-built, locks, night) remain the engine's job; the server only
 blocks *static* lore-vs-canon contradictions.
+
+> Note: the semantic check is **deployment configuration**, not player config. The server
+> uses its own `OPENROUTER_API_KEY` (a project key you set in Vercel), never the player's
+> in-browser key — so validation cost and rate limits are the project's, and the check works
+> for players who haven't entered a key.
 
 ### Lore vs. canon world rules
 
