@@ -4,7 +4,7 @@
     "title": "The Wreck of the Meridian",
     "tagline": "A castaway on a hostile shore. Loot the wreck before the sea takes it, then find a way to leave.",
     "archetype": "Robinson Crusoe survival thriller (public domain, 1719) — also echoes CAST AWAY (2000)",
-    "engine": "poc/lighthouse-nl/index.html"
+    "engine": "index.html"
   },
   "constraints": [
     "Ecology is self-consistent with an equatorial castaway island: reef, palms, mangroves, feral goats, seabirds, jungle cats, parrots, sharks. No cold/temperate or volcanic life.",
