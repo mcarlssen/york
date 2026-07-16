@@ -1,5 +1,5 @@
 // York — Shared Lore API (Vercel serverless function)
-// GET  /api/lore?world=castaway       -> { world, nodes:[...], edges:[...], count }
+// GET  /api/lore?world=meridian       -> { world, nodes:[...], edges:[...], count }
 // POST /api/lore  { world, nodes:[...] } -> { ok, merged, note }
 //
 // This is the SHARED tier of the three-tier memory architecture
@@ -33,33 +33,102 @@ function loadWorld(world) {
   return null;
 }
 
-// Static content checks derived from the world's constraints. The stateful
-// "cannot leave until craft built" rule is enforced live by the engine; here
-// we only block content that contradicts the world's fixed ecology/identity.
+// --- canon context: the established world the candidate fact is checked against ----
+// We feed the model the actual rules + seeded facts + ecology so it can judge
+// contradiction semantically, not by matching banned words.
+function canonContext(doc) {
+  const parts = [];
+  for (const c of (doc && doc.constraints || [])) parts.push("RULE: " + c);
+  for (const e of (doc && doc.lore_seed || []))
+    parts.push("FACT: " + [e.subject, e.relation, e.object].filter(Boolean).join(" "));
+  const eco = (doc && doc.ecology) || {};
+  for (const k of ["climate", "terrain", "flora", "fauna", "threats"]) {
+    const v = eco[k];
+    if (Array.isArray(v)) v.forEach(x => parts.push(`ECOLOGY ${k}: ${x}`));
+    else if (v) parts.push(`ECOLOGY ${k}: ${v}`);
+  }
+  return parts.join("\n");
+}
+
+// Offline keyword heuristic — the fallback when no LLM is configured. Deliberately
+// coarse: it catches the obvious contradictions but will false-positive/negative, which
+// is exactly why the semantic path below is the primary check when available.
 function forbiddenTerms(doc) {
   const base = ["magic portal", "dragon", "unicorn", "wizard", "fairy", "ghost ship of the damned"];
   const low = (doc && doc.constraints || []).join(" ").toLowerCase();
   if (/equatorial|reef|palm|jungle|tropical/.test(low)) {
-    // equatorial castaway world: reject cold/temperate/volcanic life
     base.push("volcanic", "glacier", "polar", "tundra", "permafrost", "ice sheet", "snow leopard");
   } else if (/cold|volcanic|arctic|temperate/.test(low)) {
-    // cold world: reject tropical life
     base.push("jungle", "palm tree", "tropical", "coral reef", "equator", "monsoon");
   }
   return base;
 }
 
-function validateNode(n, doc) {
+function extractJSON(raw) {
+  if (!raw) return null;
+  let s = String(raw).replace(/```json|```/g, "").trim();
+  const i = s.indexOf("{"), j = s.lastIndexOf("}");
+  if (i >= 0 && j > i) s = s.slice(i, j + 1);
+  try { return JSON.parse(s); } catch { return null; }
+}
+
+// Semantic contradiction check. When a server-side OPENROUTER_API_KEY is set, the model
+// judges whether the candidate fact conflicts with the established world. Returns
+// { conflict, why } or null when no LLM is available (caller falls back to the heuristic).
+// Degrades safely: any error/empty response => null (treated as "no verdict", not "reject").
+async function semanticConflict(text, ctx) {
+  const key = process.env.OPENROUTER_API_KEY;
+  if (!key) return null;
+  const model = process.env.LORE_VALIDATOR_MODEL || "nvidia/nemotron-3-ultra-550b-a55b:free";
+  const sys = `You are a world-consistency validator. Given an ESTABLISHED world (rules + facts) ` +
+    `and a CANDIDATE fact, decide whether the candidate contradicts the established world. ` +
+    `Answer ONLY JSON: {"conflict": true|false, "why": "short reason or empty"}. ` +
+    `A conflict means the candidate asserts something impossible or contradictory in this world ` +
+    `(e.g. cold life on an equatorial island, magic, a being the world explicitly omits). ` +
+    `Merely adding new consistent detail (a new reef fish, a new tide pool) is NOT a conflict.`;
+  try {
+    const r = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json", "HTTP-Referer": "http://localhost" },
+      body: JSON.stringify({
+        model, max_tokens: 200,
+        messages: [
+          { role: "system", content: sys },
+          { role: "user", content: `ESTABLISHED WORLD:\n${ctx}\n\nCANDIDATE FACT:\n"${text}"` },
+        ],
+      }),
+    });
+    if (!r.ok) return null;
+    const d = await r.json();
+    const raw = (d.choices && d.choices[0] && d.choices[0].message && (d.choices[0].message.content || ""));
+    const j = extractJSON(raw);
+    if (!j || typeof j.conflict !== "boolean") return null;
+    return { conflict: j.conflict, why: j.why || "" };
+  } catch {
+    return null;
+  }
+}
+
+// Validate a single pushed node. Async because the semantic check may call the LLM.
+// Order: shape -> source label -> semantic (LLM, if configured) -> keyword heuristic fallback.
+async function validateNode(n, doc) {
   if (!n || typeof n !== "object") return "not an object";
   if (typeof n.text !== "string" || !n.text.trim()) return "missing text";
   if (n.text.length > 400) return "text too long (max 400)";
-  const bad = forbiddenTerms(doc).find(t => n.text.toLowerCase().includes(t));
-  if (bad) return `contradicts the world's ecology/identity constraints ("${bad}")`;
   // never accept 'spec'/'shared' sources from a client — they are server-assigned
   if (n.source === "spec" || n.source === "shared" || n.source === "canonical")
     return "forbidden source label";
+  // primary: semantic contradiction against the established world
+  const sem = await semanticConflict(n.text, canonContext(doc));
+  if (sem && sem.conflict) return `contradicts the world's established canon (${sem.why})`;
+  // offline fallback: coarse keyword heuristic when no LLM is configured
+  const bad = forbiddenTerms(doc).find(t => n.text.toLowerCase().includes(t));
+  if (bad) return `contradicts the world's ecology/identity constraints ("${bad}")`;
   return null;
 }
+
+export { validateNode, semanticConflict, forbiddenTerms, canonContext };
+
 
 // --- storage: KV when available, else local file --------------------------
 const KV_KEY = (world) => `york:lore:${world}`;
@@ -133,7 +202,7 @@ export default async function handler(req, res) {
     let merged = 0, rejected = 0;
     const rejections = [];
     for (const n of incoming) {
-      const why = validateNode(n, doc);
+      const why = await validateNode(n, doc);
       if (why) { rejected++; rejections.push({ id: n.id, why }); continue; }
       const dup = g.nodes.find(ex => ex.id === n.id || similar(ex.text, n.text));
       if (dup) { continue; }

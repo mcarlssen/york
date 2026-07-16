@@ -87,6 +87,40 @@ function ok(cond, name) { if (cond) { pass++; console.log("  PASS", name); } els
   ok(res.statusCode === 200 && res.body.rejected === 1, "forbidden source label rejected");
 }
 
+// --- 6b. semantic contradiction check (LLM path) ---------------------------
+// Stub fetch + set a server-side key so the semantic branch runs. The candidate
+// below contradicts an equatorial island WITHOUT using any banned keyword, proving
+// the semantic check catches what the heuristic cannot.
+{
+  const realFetch = globalThis.fetch;
+  process.env.OPENROUTER_API_KEY = "test-key";
+  globalThis.fetch = async () => ({
+    ok: true,
+    json: async () => ({ choices: [{ message: { content:
+      '{"conflict": true, "why": "a glacier is cold/temperate life, impossible on this equatorial island"}' } }] }),
+  });
+  const doc = JSON.parse(readFileSync(new URL("../openspec/world/world.json", import.meta.url), "utf8"));
+  const why = await mod.validateNode(
+    { id: "sem1", source: "play", text: "a slow glacier calves icebergs into the lagoon" },
+    doc
+  );
+  ok(typeof why === "string" && /canon/.test(why), "semantic check rejects canon-contradicting fact");
+
+  // a consistent new detail should be accepted by the model (no conflict)
+  globalThis.fetch = async () => ({
+    ok: true,
+    json: async () => ({ choices: [{ message: { content: '{"conflict": false, "why": ""}' } }] }),
+  });
+  const ok2 = await mod.validateNode(
+    { id: "sem2", source: "play", text: "a new species of reef fish darts among the coral" },
+    doc
+  );
+  ok(ok2 === null, "semantic check accepts consistent new detail");
+
+  delete process.env.OPENROUTER_API_KEY;
+  globalThis.fetch = realFetch;
+}
+
 // --- 7. GET now reflects the one merged fact -------------------------------
 {
   const res = mkRes();
