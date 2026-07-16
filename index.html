@@ -32,7 +32,7 @@
   .meters{white-space:pre;font-size:13px;line-height:1.5;margin:10px 0 4px;color:var(--ink)}
   .inv{font-size:12px;color:var(--dim);margin-top:6px}
   .inv b{color:var(--ink)}
-  #log{flex:1;overflow:auto;font-size:13px;padding-right:4px;min-height:200px;display:flex;flex-direction:column-reverse}
+  #log{flex:1;overflow:auto;font-size:13px;padding-right:4px;min-height:200px}
   #log .e{margin:0 0 5px;border-left:2px solid transparent;padding-left:7px}
   #log .good{border-color:var(--good)}
   #log .bad{border-color:var(--bad);color:#ffb3b3}
@@ -52,13 +52,15 @@
   .jnode .jdetail{display:none;margin-top:6px;color:#bfeed4;line-height:1.5;white-space:pre-wrap}
   .jnode.open .jdetail{display:block}
   .jnode .jlinks{color:var(--dim);font-size:11px;margin-top:5px}
-  #input{display:flex;gap:8px;margin-top:12px}
-  #input input{flex:1;background:#0c2018;color:var(--ink);border:1px solid var(--line);
+  #input{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+  #input input{flex:1;min-width:200px;background:#0c2018;color:var(--ink);border:1px solid var(--line);
     border-radius:6px;padding:9px 11px;font:inherit}
   #input input:focus{outline:none;border-color:var(--ink)}
   #input button{background:var(--key);color:#1a0f2e;border:none;border-radius:6px;
-    padding:0 16px;font:inherit;font-weight:600;cursor:pointer}
+    padding:0 16px;font:inherit;font-weight:600;cursor:pointer;white-space:nowrap}
   #input button:disabled{opacity:.5;cursor:wait}
+  #copyChat{background:var(--fog);color:#06100c}
+  #copyChat:hover{background:#86a0e8}
   .thinking{color:var(--fog);font-size:12.5px;font-style:italic;margin:8px 0 2px;letter-spacing:.3px}
   .thinking .dot{display:inline-block;animation:blink 1.1s steps(1) infinite}
   .thinking .dot:nth-child(2){animation-delay:.18s}
@@ -91,6 +93,7 @@
       <div id="input">
         <input id="cmd" placeholder="what do you do?" />
         <button id="go">Say</button>
+        <button id="copyChat" title="Copy chat log to clipboard">Copy Chat</button>
       </div>
       <div id="thinking" class="thinking" style="display:none"></div>
       <div id="log"></div>
@@ -185,7 +188,12 @@ const WORLD_DOC = {
       goat_meat:{name:"goat meat", desc:"feral goat; real sustenance."},
       fig:{name:"fig", desc:"wild fig; food and water."},
       bamboo:{name:"bamboo", desc:"strong, light; raft and frame material."},
-      fresh_water:{name:"fresh water", desc:"the difference between life and the sun."}
+      fresh_water:{name:"fresh water", desc:"the difference between life and the sun."},
+      driftwood:{name:"driftwood", desc:"sun-bleached wood washed ashore; useful for fire and building."},
+      pebbles:{name:"pebbles", desc:"smooth shingle stones; can be used as sling ammunition."},
+      shingle:{name:"shingle", desc:"beach pebbles; the shore is paved with them."},
+      debris:{name:"debris", desc:"wreckage fragments from the Meridian; scraps of wood and rope."},
+      shellfish:{name:"shellfish", desc:"mussels and clams from the tide pools; edible."}
     }
   }
 };
@@ -502,6 +510,30 @@ function warmthDelta(d){ S.warmth = Math.max(0, Math.min(100, S.warmth+d)); }
 function signalDelta(d){ S.signal = Math.max(0, Math.min(10, S.signal+d)); }
 function tameDelta(which,d){ S.tame[which]=Math.max(0,Math.min(10,S.tame[which]+d)); }
 
+// Extract interactable items from lore facts and add them to the current location
+function maybeAddLoreItemsToLocation(fact){
+  const n = node();
+  if(!n.items) n.items = [];
+  
+  // Common beach items that the LLM might mention
+  const beachItems = ["driftwood", "pebbles", "shingle", "debris", "seabirds", "goats", "crab", "shellfish"];
+  const lowerFact = fact.toLowerCase();
+  
+  for(const item of beachItems){
+    if(lowerFact.includes(item) && !n.items.includes(item) && !hasItem(item)){
+      // Only add if it's a real item in WORLD.items or a valid forage item
+      if(WORLD.items[item] || (n.forage && n.forage === "food" && ["crab", "shellfish"].includes(item))){
+        n.items.push(item);
+      }
+    }
+  }
+  
+  // If the fact mentions the wreck is visible, make sure wreck_shore is accessible
+  if(lowerFact.includes("wreck") && S.loc === "beach" && !WORLD.nodes.beach.exits.east){
+    WORLD.nodes.beach.exits.east = "wreck_shore";
+  }
+}
+
 function describe(){
   const n = node();
   let txt = `— ${n.name} —\n${n.desc}`;
@@ -727,8 +759,10 @@ function checkEnd(){
 function commitLore(key, fact, opts){
   if(!fact) return;
   opts = opts || {};
+  // Use the key as the stable ID to prevent duplicates and overwrites
+  const stableId = opts.id || key || ("T"+(LORE.seq+1));
   LORE.commit(key, "is", fact, { source:"play", tags: opts.tags||["discovered"], turn: S.clock,
-    id: opts.id || "T"+(LORE.seq+1), text: opts.text || fact });
+    id: stableId, text: opts.text || fact });
   persistLore();
 }
 
@@ -766,8 +800,16 @@ function offlineParse(text){
   
   // 1. Questions → ask (preserve full question as say, topic from first keyword)
   if(t.endsWith("?") || /^(what|where|how|why|who|is there|can i|do i|did i|should i|would i|could i)\b/.test(t)){
+    // "what can i see", "what is here", "describe" → look action instead of ask
+    if(/\b(what can i see|what is here|what's here|describe|look around)\b/.test(t)){
+      return {action:"look", target:null, item:null, say:text};
+    }
+    // Extract meaningful topic from question: "what can i see on the beach?" → "beach"
     const topicMatch = t.match(/^(what|where|how|why|who|is there|can i|do i|did i|should i|would i|could i)\b\s*(.+)/i);
-    const topic = topicMatch ? topicMatch[2].replace(/\?$/,"").trim() : t.replace(/\?$/,"").trim();
+    let topic = topicMatch ? topicMatch[2].replace(/\?$/,"").trim() : t.replace(/\?$/,"").trim();
+    // Refine topic: extract key noun/location
+    const locationMatch = topic.match(/\b(on|at|in|near|around|about)\s+(\w+(?:\s+\w+)?)\b/i);
+    if(locationMatch) topic = locationMatch[2];
     return {action:"ask", target:topic||"general", item:null, say:text};
   }
   
@@ -1021,7 +1063,15 @@ async function playerTurn(text){
   let parsed = llmResult.parsed;
   const status = llmResult.status;
   let usedLLM = !!parsed;
-  if(!parsed) parsed = offlineParse(text);
+  
+  // Questions are parsed offline for reliability - the LLM often misinterprets topics
+  const isQuestion = text.trim().endsWith("?") || /^(what|where|how|why|who|is there|can i|do i|did i|should i|would i|could i)\b/i.test(text.trim());
+  if(isQuestion){
+    parsed = offlineParse(text);
+    usedLLM = false;
+  } else if(!parsed) {
+    parsed = offlineParse(text);
+  }
   // normalize
   parsed.action = (parsed.action||"look").toLowerCase();
   parsed.target = parsed.target||null;
@@ -1055,7 +1105,11 @@ async function playerTurn(text){
       setThinking(false);
       if(fact){
         pushLog(fact, "llm");
-        commitLore("gen:"+(LORE.seq+1), fact, {tags:["generated","lore"], text:fact});
+        // Store the fact in lore
+        const loreId = "gen:"+(LORE.seq+1);
+        commitLore(loreId, fact, {tags:["generated","lore"], text:fact});
+        // If the fact mentions visible items at current location, make them interactable
+        maybeAddLoreItemsToLocation(fact);
       } else {
         pushLog("The gray offers no answer you can trust. (Set an OpenRouter key for the LLM to weave the world.)","sys");
       }
@@ -1109,8 +1163,8 @@ function render(){
   document.getElementById("inv").innerHTML = `Inventory: <b>${inv}</b> · Clock <b>${S.clock}/${WORLD.maxClock}</b> · Wreck <b>${S.wreck}</b>`;
   document.getElementById("scene").textContent = (S.ended? "—" : `— ${n.name} —\n${n.desc}`);
   const lg=document.getElementById("log");
-  lg.innerHTML = S.log.slice(-80).reverse().map(e=>`<div class="e ${e.c}">${e.t}</div>`).join("");
-  lg.scrollTop=0;
+  lg.innerHTML = S.log.slice(-80).map(e=>`<div class="e ${e.c}">${e.t}</div>`).join("");
+  lg.scrollTop = lg.scrollHeight;
   renderJournal();
 }
 
@@ -1155,8 +1209,18 @@ function runCmd(text){
 }
 
 document.getElementById("go").onclick=()=>{ const v=document.getElementById("cmd").value.trim(); if(v) runCmd(v); };
-document.getElementById("cmd").addEventListener("keydown",e=>{ if(e.key==="Enter"){ const v=e.target.value.trim(); if(v) runCmd(v); } });
-document.getElementById("endAgain").onclick=()=>{ document.getElementById("endModal").style.display="none"; newGame(); };
+  document.getElementById("cmd").addEventListener("keydown",e=>{ if(e.key==="Enter"){ const v=e.target.value.trim(); if(v) runCmd(v); } });
+  document.getElementById("copyChat").onclick=copyChat;
+  
+  function copyChat(){
+    // Copy in visual order (newest first, matching UI display with flex-direction: column-reverse)
+    const lines = S.log.slice().reverse().map(e=>`${e.t}`).join("\n");
+    navigator.clipboard.writeText(lines).then(()=>{
+      pushLog("Chat log copied to clipboard.","sys");
+    }).catch(()=>{
+      pushLog("Failed to copy chat log.","bad");
+    });
+  }
 document.addEventListener("keydown",e=>{ if((e.key==="r"||e.key==="R") && !/input|textarea/i.test(e.target.tagName)){ document.getElementById("endModal").style.display="none"; newGame(); } });
 
 // optional API base override (e.g. a deployed Vercel URL): set window.YORK_API_BASE first.
