@@ -9,8 +9,9 @@
 // PR (see scripts/curate-lore.mjs). Rules precedence is preserved:
 // players may only PROPOSE; the engine + this validator ESTABLISH.
 //
-// Storage: @vercel/kv when deployed (VERCEL_KV_* env). Local dev falls
-// back to a JSON file so the logic is testable without a KV binding.
+// Storage: Upstash Redis when deployed (UPSTASH_REDIS_REST_URL/_TOKEN env).
+// Vercel KV was sunset; Redis/Upstash Redis is the supported store. Local dev
+// falls back to a JSON file so the logic is testable without a Redis binding.
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { join, dirname } from "node:path";
@@ -130,25 +131,36 @@ async function validateNode(n, doc) {
 export { validateNode, semanticConflict, forbiddenTerms, canonContext };
 
 
-// --- storage: KV when available, else local file --------------------------
-const KV_KEY = (world) => `york:lore:${world}`;
+// --- storage: Upstash Redis when configured, else local file ---------------
+// Vercel KV was sunset; Upstash Redis (or Redis) is the supported store. Set
+// UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN (the REST credentials from
+// your Upstash database) to enable persistence. Without them, the function falls
+// back to a local JSON file so the logic is testable in dev.
+const STORE_KEY = (world) => `york:lore:${world}`;
 const LOCAL_FILE = join(__dirname, "..", ".cache", "shared-lore.json");
 
-let kv = null;
-async function getKV() {
-  if (kv !== null) return kv;
-  try {
-    const mod = await import("@vercel/kv");
-    if (mod && mod.kv) kv = mod.kv;
-    else kv = false;
-  } catch { kv = false; }
-  return kv;
+let redis = null;
+async function getRedis() {
+  if (redis !== null) return redis;
+  if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
+    try {
+      const mod = await import("@upstash/redis");
+      if (mod && mod.Redis) redis = new mod.Redis({
+        url: process.env.UPSTASH_REDIS_REST_URL,
+        token: process.env.UPSTASH_REDIS_REST_TOKEN,
+      });
+      else redis = false;
+    } catch { redis = false; }
+  } else {
+    redis = false;
+  }
+  return redis;
 }
 
 async function readGraph(world) {
-  const k = await getKV();
-  if (k) {
-    const v = await k.get(KV_KEY(world));
+  const r = await getRedis();
+  if (r) {
+    const v = await r.get(STORE_KEY(world));
     return v || { world, nodes: [], edges: [] };
   }
   if (existsSync(LOCAL_FILE)) {
@@ -161,8 +173,8 @@ async function readGraph(world) {
 }
 
 async function writeGraph(graph) {
-  const k = await getKV();
-  if (k) { await k.set(KV_KEY(graph.world), graph); return; }
+  const r = await getRedis();
+  if (r) { await r.set(STORE_KEY(graph.world), graph); return; }
   const all = existsSync(LOCAL_FILE) ? JSON.parse(readFileSync(LOCAL_FILE, "utf8")) : {};
   all[graph.world] = graph;
   mkdirSync(dirname(LOCAL_FILE), { recursive: true });

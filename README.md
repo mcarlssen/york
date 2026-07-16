@@ -203,18 +203,21 @@ the canon, and it never lets a lore fact become (or impersonate) a world rule.
 
 ### Storage
 
-- **Production:** `@vercel/kv`, key `york:lore:<world>` (e.g. `york:lore:meridian`).
-- **Dev / test:** when the KV binding isn't present, the function falls back to a local JSON
-  file at `.cache/shared-lore.json` so the whole flow runs without a KV instance.
+- **Production:** Upstash Redis (Vercel's supported Redis store after KV was sunset), key
+  `york:lore:<world>` (e.g. `york:lore:meridian`). Configure via `UPSTASH_REDIS_REST_URL`
+  and `UPSTASH_REDIS_REST_TOKEN` (your database's REST credentials).
+- **Dev / test:** when those env vars aren't set, the function falls back to a local JSON
+  file at `.cache/shared-lore.json` so the whole flow runs without a Redis instance.
 
 ### Files
 
 - `api/lore.js` — `GET /api/lore?world=meridian` returns `{ world, nodes, edges, count }`;
-  `POST /api/lore` with `{ world, nodes:[...] }` validates + merges. KV with local fallback.
+  `POST /api/lore` with `{ world, nodes:[...] }` validates + merges. Upstash Redis with
+  local fallback.
 - `scripts/curate-lore.mjs` — diff shared vs canonical, emit an OpenSpec change + candidates.
 - `scripts/test-shared-lore.mjs` — headless test of the push/pull/validate round-trip
-  (9 assertions: empty GET, valid merge, ecology rejection, id + text de-dup, forbidden
-  source, merged GET, curator change).
+  (11 assertions: empty GET, valid merge, semantic conflict + accept, ecology rejection,
+  id + text de-dup, forbidden source, merged GET, curator change).
 
 Run the tests:
 
@@ -224,5 +227,7 @@ node scripts/test-shared-lore.mjs
 
 ## Deploy
 
-The game is static (`index.html`). The shared-lore API needs a Vercel deployment with a
-`VERCEL_KV_*` binding and `window.YORK_API_BASE` pointed at the deployed URL in `index.html`.
+The game is static (`index.html`). The shared-lore API needs a Vercel deployment with an
+Upstash Redis database (set `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN`) and, for
+the semantic canon check, an `OPENROUTER_API_KEY`. `window.YORK_API_BASE` defaults to `/api`,
+which works when the game and API are served from the same Vercel deployment.
