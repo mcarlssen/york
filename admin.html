@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>York — Lore Curation Dashboard</title>
+<style>
+  :root{
+    --bg:#06100c; --ink:#7dffb0; --dim:#3f7a5d; --bad:#ff6b6b; --warn:#ffd166;
+    --good:#9bffce; --fog:#9bb7ff; --panel:#0a1812; --line:#16352a; --key:#c08bff;
+    --accent:#ff8c42;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace;font-size:13px;line-height:1.5;background:var(--bg);color:var(--ink)}
+  a{color:var(--fog)} a:hover{color:var(--ink)}
+  .wrap{max-width:1400px;margin:0 auto;padding:16px;min-height:100%}
+  header{border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
+  h1{font-size:18px;margin:0;letter-spacing:2px;text-shadow:0 0 8px rgba(125,255,176,.4)}
+  .sub{color:var(--dim);font-size:12px}
+  .toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center}
+  .toolbar input,.toolbar select{background:#0c2018;color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:8px 10px;font:inherit}
+  .toolbar input:focus,.toolbar select:focus{outline:none;border-color:var(--ink)}
+  .toolbar label{color:var(--dim);font-size:12px;display:flex;align-items:center;gap:6px;cursor:pointer}
+  .btn{background:var(--key);color:#1a0f2e;border:none;border-radius:6px;padding:8px 14px;font:inherit;font-weight:600;cursor:pointer}
+  .btn:hover{background:#b070ff} .btn:disabled{opacity:.5;cursor:not-allowed}
+  .btn-secondary{background:var(--fog);color:#06100c} .btn-secondary:hover{background:#86a0e8}
+  .btn-danger{background:var(--bad);color:#1a0a0a} .btn-danger:hover{background:#ff5252}
+  .btn-success{background:var(--good);color:#06100c} .btn-success:hover{background:#7df5b0}
+  .stats{display:flex;gap:16px;color:var(--dim);font-size:12px;margin-bottom:8px;flex-wrap:wrap}
+  .stat{background:#08130d;border:1px solid var(--line);border-radius:6px;padding:6px 10px}
+  .stat b{color:var(--ink)}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  th,td{border-bottom:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+  th{color:var(--dim);font-weight:600;position:sticky;top:0;background:var(--panel);z-index:1}
+  tr:hover td{background:#08130d}
+  .node-id{font-family:monospace;font-size:11px;color:var(--dim);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .node-text{white-space:pre-wrap;max-width:500px;line-height:1.4}
+  .node-tags{display:flex;gap:4px;flex-wrap:wrap}
+  .tag{font-size:10px;padding:2px 6px;border-radius:4px;background:#0c2018;border:1px solid var(--line);color:var(--dim);text-transform:uppercase}
+  .tag-source-play{background:#1a3a2a;border-color:var(--good);color:var(--good)}
+  .tag-source-generated{background:#2a1a3a;border-color:var(--key);color:#d9c2ff}
+  .tag-source-shared{background:#1a2a3a;border-color:var(--fog);color:var(--fog)}
+  .tag-source-player{background:#1a3a1a;border-color:#7dff7d;color:#7dff7d}
+  .tag-candidate{background:#3a2a0a;border-color:var(--warn);color:var(--warn);font-weight:600}
+  .badge{font-size:10px;padding:2px 6px;border-radius:4px;font-weight:600}
+  .badge-candidate{background:var(--warn);color:#06100c}
+  .badge-in-canon{background:var(--dim);color:var(--bg)}
+  .badge-rejected{background:var(--bad);color:#1a0a0a}
+  .badge-accepted{background:var(--good);color:#06100c}
+  .actions{display:flex;gap:6px;flex-wrap:wrap}
+  .action-btn{padding:4px 10px;font-size:11px;border-radius:4px;border:none;cursor:pointer;font-weight:600}
+  .action-btn.accept{background:var(--good);color:#06100c}
+  .action-btn.reject{background:var(--bad);color:#1a0a0a}
+  .action-btn.copy{background:var(--fog);color:#06100c}
+  .action-btn:disabled{opacity:.4;cursor:not-allowed}
+  .modal{position:fixed;inset:0;background:rgba(2,8,5,.9);display:flex;align-items:center;justify-content:center;z-index:100;padding:20px}
+  .modal.hidden{display:none}
+  .modal-box{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:20px;max-width:700px;width:100%;max-height:80vh;overflow:auto}
+  .modal-box h2{color:var(--good);margin-top:0}
+  .modal-box pre{background:#06100c;border:1px solid var(--line);border-radius:6px;padding:12px;overflow:auto;max-height:400px}
+  .modal-box code{font-family:inherit;font-size:11px;line-height:1.5}
+  .footer{margin-top:24px;color:var(--dim);font-size:11px;border-top:1px solid var(--line);padding-top:12px}
+  .empty{color:var(--dim);font-style:italic;padding:40px;text-align:center}
+  .loading{color:var(--fog);text-align:center;padding:40px}
+  @media(max-width:900px){.node-text{max-width:300px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>YORK LORE CURATION</h1>
+      <div class="sub">Shared graph viewer & canonical promotion</div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-secondary" id="btnRefresh">Refresh Graph</button>
+      <button class="btn" id="btnExport">Export JSON</button>
+    </div>
+  </header>
+
+  <div class="toolbar">
+    <input type="search" id="search" placeholder="Search text, subject, tags..." aria-label="Search nodes">
+    <select id="filterSource">
+      <option value="">All sources</option>
+      <option value="player">player (shared)</option>
+      <option value="generated">generated (local LLM)</option>
+      <option value="play">play (local actions)</option>
+      <option value="spec">spec (canon baseline)</option>
+      <option value="shared">shared (server)</option>
+    </select>
+    <select id="filterStatus">
+      <option value="">All statuses</option>
+      <option value="candidate">🟡 Candidate for canon</option>
+      <option value="in-canon">✅ Already in canon</option>
+      <option value="accepted">🟢 Accepted this session</option>
+      <option value="rejected">🔴 Rejected this session</option>
+    </select>
+    <label><input type="checkbox" id="showOnlyCandidate" /> Candidates only</label>
+    <span style="flex:1"></span>
+    <button class="btn btn-success" id="btnAcceptAll" title="Accept all visible candidates">Accept All Visible</button>
+  </div>
+
+  <div class="stats" id="stats"></div>
+
+  <div id="tableWrap">
+    <table id="loreTable">
+      <thead>
+        <tr>
+          <th style="width:50px">#</th>
+          <th style="width:140px">ID</th>
+          <th>Text</th>
+          <th style="width:120px">Source</th>
+          <th style="width:180px">Tags</th>
+          <th style="width:60px">Turn</th>
+          <th style="width:140px">Status</th>
+          <th style="width:180px">Actions</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+    <div class="empty" id="emptyState" style="display:none">No nodes match current filters.</div>
+  </div>
+
+  <div class="footer">
+    <strong>Workflow:</strong> Nodes from the SHARED tier (source <code>player</code>/<code>shared</code>) that don't exist in the CANONICAL <code>world.json</code> are marked <span class="badge badge-candidate">Candidate</span>. 
+    <button class="action-btn accept" onclick="copyAllCandidates()">Copy All Candidate Blocks</button> → paste into <code>openspec/world/world.json</code> <code>lore_seed</code> → PR.
+    <br>Green = accepted this session, Red = rejected, Gray = already in canon. Local-only nodes (generated/play) are not promotable — only shared-tier nodes can enter canon.
+  </div>
+</div>
+
+<div class="modal hidden" id="modal">
+  <div class="modal-box">
+    <h2 id="modalTitle"></h2>
+    <pre><code id="modalCode"></code></pre>
+    <div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-secondary" onclick="closeModal()">Close</button>
+      <button class="btn" onclick="copyModal()">Copy to Clipboard</button>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+const API_BASE = "/api";
+const WORLD = "meridian";
+const CANON_PATH = "openspec/world/world.json";
+
+let allNodes = [];
+let canonTexts = [];
+let sessionAccepted = new Set(); // node IDs accepted this session
+let sessionRejected = new Set(); // node IDs rejected this session
+
+// --- Helpers ---
+function escapeHtml(s){ return String(s).replace(/[&<>"]/g,c=>({"&":"&","<":"<",">":">",'"':"""}[c])); }
+function normText(s){ return (s||"").toLowerCase().replace(/[^a-z0-9 ]/g," ").replace(/\s+/g," ").trim(); }
+function similar(a,b){
+  const na=normText(a), nb=normText(b);
+  if(!na||!nb||na===nb) return na===nb;
+  const wa=new Set(na.split(" ")), wb=new Set(nb.split(" "));
+  let ov=0; for(const w of wa) if(wb.has(w)) ov++;
+  return ov/(wa.size+wb.size-ov) > 0.75;
+}
+function tagClass(source){
+  return {
+    "player":"tag-source-player",
+    "shared":"tag-source-shared",
+    "generated":"tag-source-generated",
+    "play":"tag-source-play",
+    "spec":"tag-source-play"
+  }[source]||"";
+}
+function showToast(msg, cls){
+  const el=document.createElement("div");
+  el.textContent=msg; el.style.cssText=`position:fixed;bottom:20px;right:20px;padding:10px 16px;border-radius:6px;font-size:12px;font-weight:600;z-index:200;${cls==="ok"?"background:var(--good);color:#06100c":"background:var(--bad);color:#1a0a0a"}`;
+  document.body.appendChild(el);
+  setTimeout(()=>el.remove(),2500);
+}
+
+// --- Data Loading ---
+async function loadCanonTexts(){
+  try{
+    const r=await fetch(CANON_PATH);
+    if(!r.ok) throw new Error("Failed to load canon");
+    const doc=await r.json();
+    const texts=[];
+    for(const e of (doc.lore_seed||[])) texts.push(e.object||e.subject||"");
+    const eco=doc.ecology||{};
+    for(const k of ["climate","terrain","flora","fauna","threats"]){
+      const v=eco[k];
+      if(Array.isArray(v)) v.forEach(x=>texts.push(x));
+      else if(v) texts.push(v);
+    }
+    canonTexts=texts;
+  }catch(e){
+    console.warn("Could not load canon texts:",e);
+    canonTexts=[];
+  }
+}
+
+function isInCanon(text){
+  return canonTexts.some(t=>similar(t,text));
+}
+
+async function loadSharedGraph(){
+  const r=await fetch(`${API_BASE}/lore?world=${WORLD}`);
+  if(!r.ok) throw new Error(`GET /api/lore failed: ${r.status}`);
+  const data=await r.json();
+  return data.nodes||[];
+}
+
+function computeStatus(node){
+  if(sessionAccepted.has(node.id)) return "accepted";
+  if(sessionRejected.has(node.id)) return "rejected";
+  const promotable = ["player","shared"].includes(node.source);
+  if(promotable && !isInCanon(node.text)) return "candidate";
+  if(promotable && isInCanon(node.text)) return "in-canon";
+  return "local-only";
+}
+
+// --- Rendering ---
+function renderStats(){
+  const counts={total:0,candidate:0,inCanon:0,accepted:0,rejected:0,localOnly:0,bySource:{}};
+  for(const n of allNodes){
+    counts.total++;
+    const st=computeStatus(n);
+    if(st==="candidate") counts.candidate++;
+    else if(st==="in-canon") counts.inCanon++;
+    else if(st==="accepted") counts.accepted++;
+    else if(st==="rejected") counts.rejected++;
+    else counts.localOnly++;
+    counts.bySource[n.source]=(counts.bySource[n.source]||0)+1;
+  }
+  document.getElementById("stats").innerHTML=`
+    <span class="stat"><b>${counts.total}</b> total</span>
+    <span class="stat"><b>${counts.candidate}</b> <span class="badge badge-candidate">Candidate</span></span>
+    <span class="stat"><b>${counts.inCanon}</b> <span class="badge" style="background:var(--dim);color:var(--bg)">In Canon</span></span>
+    <span class="stat"><b>${counts.accepted}</b> <span class="badge" style="background:var(--good);color:#06100c">Accepted</span></span>
+    <span class="stat"><b>${counts.rejected}</b> <span class="badge" style="background:var(--bad);color:#1a0a0a">Rejected</span></span>
+    <span class="stat"><b>${counts.localOnly}</b> local-only</span>
+  `;
+}
+
+function renderTable(){
+  const search=document.getElementById("search").value.toLowerCase();
+  const filterSource=document.getElementById("filterSource").value;
+  const filterStatus=document.getElementById("filterStatus").value;
+  const onlyCandidate=document.getElementById("showOnlyCandidate").checked;
+
+  const tbody=document.querySelector("#loreTable tbody");
+  const empty=document.getElementById("emptyState");
+  tbody.innerHTML="";
+
+  let idx=0;
+  for(const node of allNodes){
+    if(search){
+      const hay=(node.text+" "+node.subject+" "+node.tags.join(" ")+" "+node.id).toLowerCase();
+      if(!hay.includes(search)) continue;
+    }
+    if(filterSource && node.source!==filterSource) continue;
+    const status=computeStatus(node);
+    if(filterStatus && status!==filterStatus) continue;
+    if(onlyCandidate && status!=="candidate") continue;
+
+    idx++;
+    const tr=document.createElement("tr");
+    const tagsHtml=(node.tags||[]).map(t=>`<span class="tag ${tagClass(t)}">${escapeHtml(t)}</span>`).join("");
+    const sourceBadge=`<span class="tag ${tagClass(node.source)}">${escapeHtml(node.source)}</span>`;
+    const statusHtml=(()=>{
+      switch(status){
+        case "candidate": return '<span class="badge badge-candidate">Candidate</span>';
+        case "in-canon": return '<span class="badge" style="background:var(--dim);color:var(--bg)">In Canon</span>';
+        case "accepted": return '<span class="badge" style="background:var(--good);color:#06100c">Accepted</span>';
+        case "rejected": return '<span class="badge" style="background:var(--bad);color:#1a0a0a">Rejected</span>';
+        default: return '<span class="badge" style="background:#222;color:var(--dim)">Local Only</span>';
+      }
+    })();
+
+    const promotable = ["player","shared"].includes(node.source);
+    const canAct = promotable && status==="candidate";
+    const acceptDisabled = !canAct ? "disabled" : "";
+    const rejectDisabled = !canAct ? "disabled" : "";
+    const copyDisabled = status!=="candidate" ? "disabled" : "";
+
+    tr.innerHTML=`
+      <td>${idx}</td>
+      <td class="node-id" title="${escapeHtml(node.id)}">${escapeHtml(node.id)}</td>
+      <td class="node-text">${escapeHtml(node.text)}</td>
+      <td>${sourceBadge}</td>
+      <td class="node-tags">${tagsHtml}</td>
+      <td>${node.turn||0}</td>
+      <td>${statusHtml}</td>
+      <td class="actions">
+        <button class="action-btn accept" ${acceptDisabled} onclick="acceptNode('${escapeHtml(node.id)}')">Accept</button>
+        <button class="action-btn reject" ${rejectDisabled} onclick="rejectNode('${escapeHtml(node.id)}')">Reject</button>
+        <button class="action-btn copy" ${copyDisabled} onclick="copyCandidateBlock('${escapeHtml(node.id)}')">Copy Block</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  }
+  empty.style.display=idx===0?"block":"none";
+}
+
+// --- Actions ---
+function acceptNode(id){
+  sessionAccepted.add(id);
+  sessionRejected.delete(id);
+  renderTable(); renderStats();
+  showToast(`Accepted ${id}`, "ok");
+}
+
+function rejectNode(id){
+  sessionRejected.add(id);
+  sessionAccepted.delete(id);
+  renderTable(); renderStats();
+  showToast(`Rejected ${id}`, "err");
+}
+
+function copyCandidateBlock(id){
+  const node=allNodes.find(n=>n.id===id);
+  if(!node) return;
+  const date=new Date().toISOString().slice(0,10);
+  const idx=allNodes.filter(n=>computeStatus(n)==="candidate").findIndex(n=>n.id===id)+1;
+  const block=`
+    { "id": "shared_${date}_${idx}", "subject": ${JSON.stringify(node.subject||"the world")}, "relation": ${JSON.stringify(node.relation||"includes")}, "object": ${JSON.stringify(node.text)}, "tags": ${JSON.stringify((node.tags||[]).concat("shared","curated"))} }`.trim();
+  showModal(`Candidate Block — ${id}`, block);
+}
+
+function copyAllCandidates(){
+  const candidates=allNodes.filter(n=>computeStatus(n)==="candidate");
+  if(!candidates.length){ showToast("No candidates to copy","err"); return; }
+  const date=new Date().toISOString().slice(0,10);
+  const blocks=candidates.map((node,i)=>
+    `    { "id": "shared_${date}_${i+1}", "subject": ${JSON.stringify(node.subject||"the world")}, "relation": ${JSON.stringify(node.relation||"includes")}, "object": ${JSON.stringify(node.text)}, "tags": ${JSON.stringify((node.tags||[]).concat("shared","curated"))} }`
+  ).join(",\n");
+  const out=`[\n${blocks}\n]`;
+  showModal(`All ${candidates.length} Candidate Blocks`, out);
+}
+
+function showModal(title, code){
+  document.getElementById("modalTitle").textContent=title;
+  document.getElementById("modalCode").textContent=code;
+  document.getElementById("modal").classList.remove("hidden");
+}
+function closeModal(){ document.getElementById("modal").classList.add("hidden"); }
+function copyModal(){
+  navigator.clipboard.writeText(document.getElementById("modalCode").textContent);
+  showToast("Copied to clipboard","ok");
+}
+
+async function exportJSON(){
+  const data={world:WORLD,nodes:allNodes,exportedAt:new Date().toISOString(),sessionAccepted:[...sessionAccepted],sessionRejected:[...sessionRejected]};
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a"); a.href=url; a.download=`york-lore-${WORLD}-${new Date().toISOString().slice(0,10)}.json`; a.click(); URL.revokeObjectURL(url);
+  showToast("Exported JSON","ok");
+}
+
+// --- Event Listeners ---
+document.getElementById("search").addEventListener("input",renderTable);
+document.getElementById("filterSource").addEventListener("change",renderTable);
+document.getElementById("filterStatus").addEventListener("change",renderTable);
+document.getElementById("showOnlyCandidate").addEventListener("change",renderTable);
+document.getElementById("btnRefresh").addEventListener("click",init);
+document.getElementById("btnExport").addEventListener("click",exportJSON);
+document.getElementById("btnAcceptAll").addEventListener("click",()=>{
+  const candidates=allNodes.filter(n=>computeStatus(n)==="candidate");
+  for(const n of candidates) sessionAccepted.add(n.id);
+  renderTable(); renderStats();
+  showToast(`Accepted ${candidates.length} candidates`,"ok");
+});
+
+// --- Init ---
+async function init(){
+  document.querySelector("#loreTable tbody").innerHTML='<tr><td colspan="8" class="loading">Loading shared graph & canon...</td></tr>';
+  try{
+    await loadCanonTexts();
+    allNodes=await loadSharedGraph();
+    renderStats(); renderTable();
+    showToast(`Loaded ${allNodes.length} nodes`,"ok");
+  }catch(e){
+    console.error(e);
+    document.querySelector("#loreTable tbody").innerHTML=`<tr><td colspan="8" class="loading" style="color:var(--bad)">Error: ${escapeHtml(e.message)}</td></tr>`;
+    showToast("Failed to load","err");
+  }
+}
+
+init();
+</script>
+</body>
+</html>
