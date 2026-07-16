@@ -7,8 +7,10 @@ tamed-animal companions, and procedural worldbuilding.
 
 ## Play it
 
-Open `index.html` in any browser — no build step. Paste an OpenRouter API key to enable
-natural-language interpretation; without it the built-in offline parser runs.
+Open `index.html` in any browser — no build step. No key entry in the UI: the LLM is
+reached through the server (`POST /api/llm`), which holds the `OPENROUTER_API_KEY`
+environment variable. Without a reachable server, the built-in offline parser runs the
+game entirely client-side.
 
 ## The core loop: the Wreck's Clock
 
@@ -60,8 +62,9 @@ All rules, map, ecology, companions, puzzles, and endings live in `openspec/worl
 - `tame the cat` (jungle, goat meat) / `tame the parrot` (cliff, fig)
 - `launch` (raft/balloon built) / `wait` (advances the clock; night drains warmth)
 
-Enter acts, `R` restarts. Paste an OpenRouter key to enable LLM interpretation; without it the
-offline parser runs.
+Enter acts, `R` restarts. Type in plain language — the server LLM interprets your words,
+falling back to the offline parser when the server is unreachable. There are no on-screen
+hints or suggestion pills; the island is yours to explore.
 
 ## Design docs
 
@@ -104,12 +107,14 @@ Rules precedence holds in every tier: nothing may contradict the ruleset.
    the LLM generated (`genLore`/`genPlace`), journals you examined, places you uncovered.
    These nodes carry `source: "play"` / `"generated"` so they're distinguishable from the
    spec-seeded baseline.
-2. **Contribute (push).** Click **Contribute** (or type `contribute` / `share my
-   discoveries`). `collectContributions()` gathers only your player-generated nodes;
-   `validateFactClient()` drops anything that obviously contradicts the world's ecology
-   (e.g. tropical life on this equatorial island); then `pushLore()` POSTs the rest to
-   `API_BASE + "/lore"`. This is non-destructive to your local memory and best-effort — if
-   the server is unreachable, your local game is unaffected.
+2. **Contribute (push) — automatic.** Contribution is now silent and automatic: at the end
+   of each session, `autoContribute()` gathers only your player-generated nodes via
+   `collectContributions()`, `validateFactClient()` drops anything that obviously
+   contradicts the world's ecology (e.g. tropical life on this equatorial island), then
+   `pushLore()` POSTs the rest to `API_BASE + "/lore"`. `pushLore()` early-returns when there
+   is nothing new, so a quiet session costs zero shared-store writes. This is non-destructive
+   to your local memory and best-effort — if the server is unreachable, your local game is
+   unaffected.
 3. **Server validation + merge.** `api/lore.js` validates each node against the world's
    `constraints` (see below), de-duplicates by `id` and by >0.75 text similarity, tags
    survivors `source: "player"` + `"shared"`, and writes them to the shared store. The
@@ -183,9 +188,10 @@ Stateful mechanics (craft-built, locks, night) remain the engine's job; the serv
 blocks *static* lore-vs-canon contradictions.
 
 > Note: the semantic check is **deployment configuration**, not player config. The server
-> uses its own `OPENROUTER_API_KEY` (a project key you set in Vercel), never the player's
-> in-browser key — so validation cost and rate limits are the project's, and the check works
-> for players who haven't entered a key.
+> uses its own `OPENROUTER_API_KEY` (a project key you set in Vercel); the player has no key
+> in the UI at all. Player LLM interpretation also goes through the server via `POST /api/llm`
+> (the engine's `callLLMProxy`), so the key never ships to the client and validation cost and
+> rate limits are the project's.
 
 ### Lore vs. canon world rules
 
@@ -212,12 +218,13 @@ the canon, and it never lets a lore fact become (or impersonate) a world rule.
 ### Files
 
 - `api/lore.js` — `GET /api/lore?world=meridian` returns `{ world, nodes, edges, count }`;
-  `POST /api/lore` with `{ world, nodes:[...] }` validates + merges. Upstash Redis with
-  local fallback.
+  `POST /api/lore` with `{ world, nodes:[...] }` validates + merges. `POST /api/llm` with
+  `{ system, user, maxTokens }` proxies the player's interpretation/world-generation calls
+  through the server (key stays server-side). Upstash Redis with local fallback.
 - `scripts/curate-lore.mjs` — diff shared vs canonical, emit an OpenSpec change + candidates.
 - `scripts/test-shared-lore.mjs` — headless test of the push/pull/validate round-trip
-  (11 assertions: empty GET, valid merge, semantic conflict + accept, ecology rejection,
-  id + text de-dup, forbidden source, merged GET, curator change).
+  (12 assertions: empty GET, valid merge, semantic conflict + accept, ecology rejection,
+  id + text de-dup, forbidden source, merged GET, /api/llm proxy, curator change).
 
 Run the tests:
 
@@ -228,6 +235,8 @@ node scripts/test-shared-lore.mjs
 ## Deploy
 
 The game is static (`index.html`). The shared-lore API needs a Vercel deployment with an
-Upstash Redis database (set `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN`) and, for
-the semantic canon check, an `OPENROUTER_API_KEY`. `window.YORK_API_BASE` defaults to `/api`,
-which works when the game and API are served from the same Vercel deployment.
+Upstash Redis database (set `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN`) and an
+`OPENROUTER_API_KEY` (used for the semantic canon check *and* the player LLM proxy at
+`/api/llm`). Optionally set `YORK_LLM_MODEL` to override the server-side interpretation model
+(defaults to `nvidia/nemotron-3-ultra-550b-a55b:free`). `window.YORK_API_BASE` defaults to
+`/api`, which works when the game and API are served from the same Vercel deployment.

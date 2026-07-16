@@ -1,6 +1,7 @@
 // York — Shared Lore API (Vercel serverless function)
 // GET  /api/lore?world=meridian       -> { world, nodes:[...], edges:[...], count }
 // POST /api/lore  { world, nodes:[...] } -> { ok, merged, note }
+// POST /api/llm   { system, user, maxTokens } -> { ok, content }  (LLM proxy; key stays server-side)
 //
 // This is the SHARED tier of the three-tier memory architecture
 // (local -> shared -> canonical). It merges player-generated lore that
@@ -8,6 +9,10 @@
 // It NEVER writes to the canonical world doc; that is a human-curated
 // PR (see scripts/curate-lore.mjs). Rules precedence is preserved:
 // players may only PROPOSE; the engine + this validator ESTABLISH.
+//
+// The /api/llm route also proxies player LLM calls (interpretation, world
+// generation) so the OpenRouter key never ships to the client. The engine
+// falls back to its offline parser whenever the proxy returns no content.
 //
 // Storage: Upstash Redis when deployed (UPSTASH_REDIS_REST_URL/_TOKEN env).
 // Vercel KV was sunset; Redis/Upstash Redis is the supported store. Local dev
@@ -130,8 +135,31 @@ async function validateNode(n, doc) {
 
 export { validateNode, semanticConflict, forbiddenTerms, canonContext };
 
-
-// --- storage: Upstash Redis when configured, else local file ---------------
+// --- LLM proxy: players never see the key; the server holds OPENROUTER_API_KEY ----
+// Engine POSTs { system, user, maxTokens } here; we forward to OpenRouter and return
+// { content }. Any failure returns { content: null } so the engine falls back to its
+// offline parser. The interpreter/generator/predict models are configurable via
+// YORK_LLM_MODEL (defaults to the engine's pinned free slug).
+async function callOpenRouter(system, user, maxTokens) {
+  const key = process.env.OPENROUTER_API_KEY;
+  if (!key) return null;
+  const model = process.env.YORK_LLM_MODEL || "nvidia/nemotron-3-ultra-550b-a55b:free";
+  try {
+    const r = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json", "HTTP-Referer": "http://localhost" },
+      body: JSON.stringify({ model, max_tokens: maxTokens || 200, messages: [
+        { role: "system", content: system },
+        { role: "user", content: user },
+      ] }),
+    });
+    if (!r.ok) return null;
+    const d = await r.json();
+    return (d.choices && d.choices[0] && d.choices[0].message && (d.choices[0].message.content || "")) || null;
+  } catch {
+    return null;
+  }
+}
 // Vercel KV was sunset; Upstash Redis (or Redis) is the supported store. Set
 // UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN (the REST credentials from
 // your Upstash database) to enable persistence. Without them, the function falls
@@ -196,15 +224,16 @@ function similar(a, b) {
 
 export default async function handler(req, res) {
   const url = new URL(req.url, "http://localhost");
+  const path = url.pathname;
   const world = url.searchParams.get("world") || "meridian";
   const doc = loadWorld(world);
 
-  if (req.method === "GET") {
+  if (req.method === "GET" && path === "/api/lore") {
     const g = await readGraph(world);
     return res.status(200).json({ world, nodes: g.nodes, edges: g.edges || [], count: g.nodes.length });
   }
 
-  if (req.method === "POST") {
+  if (req.method === "POST" && path === "/api/lore") {
     let body;
     try { body = typeof req.body === "string" ? JSON.parse(req.body) : req.body; }
     catch { return res.status(400).json({ ok: false, why: "invalid JSON body" }); }
@@ -238,5 +267,13 @@ export default async function handler(req, res) {
     });
   }
 
-  return res.status(405).json({ ok: false, why: "method not allowed" });
+  if (req.method === "POST" && path === "/api/llm") {
+    let body;
+    try { body = typeof req.body === "string" ? JSON.parse(req.body) : req.body; }
+    catch { return res.status(400).json({ ok: false, why: "invalid JSON body" }); }
+    const content = await callOpenRouter(body.system, body.user, body.maxTokens);
+    return res.status(200).json({ ok: true, content });
+  }
+
+  return res.status(404).json({ ok: false, why: "not found" });
 }

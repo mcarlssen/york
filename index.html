@@ -21,22 +21,18 @@
   header{border-bottom:1px solid var(--line);padding-bottom:8px;margin-bottom:12px}
   h1{font-size:18px;margin:0;letter-spacing:2px;text-shadow:0 0 8px rgba(125,255,176,.4)}
   .sub{color:var(--dim);font-size:12px;margin-top:2px}
-  .grid{display:grid;grid-template-columns:1.5fr .9fr;gap:14px}
+  .grid{display:grid;grid-template-columns:1.55fr .85fr;gap:14px;align-items:start}
   @media(max-width:780px){.grid{grid-template-columns:1fr}}
   .panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px}
+  .panel.main{display:flex;flex-direction:column;min-height:70vh}
+  .panel.side{position:sticky;top:14px;max-height:90vh;display:flex;flex-direction:column}
   .panel h2{font-size:12px;letter-spacing:1px;color:var(--dim);margin:0 0 8px;text-transform:uppercase}
-  pre#scene{white-space:pre-wrap;margin:0;min-height:150px}
-  .meters{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px 14px;margin:10px 0}
-  .meter .lab{display:flex;justify-content:space-between;font-size:11px;color:var(--dim)}
-  .bar{height:9px;background:#0c2018;border:1px solid var(--line);border-radius:5px;overflow:hidden}
-  .bar>i{display:block;height:100%}
-  .f-life>i{background:linear-gradient(90deg,#7dffb0,#3f7a5d)}
-  .f-wreck>i{background:linear-gradient(90deg,#ffb86b,#ff6b6b)}
-  .f-signal>i{background:linear-gradient(90deg,#ffd166,#ff9f6b)}
-  .f-warmth>i{background:linear-gradient(90deg,#ff9f6b,#ff6b6b)}
+  .place{background:#08130d;border:1px solid var(--line);border-radius:6px;padding:10px 12px;margin-bottom:10px}
+  pre#scene{white-space:pre-wrap;margin:0;min-height:60px}
+  .meters{white-space:pre;font-size:13px;line-height:1.5;margin:10px 0 4px;color:var(--ink)}
   .inv{font-size:12px;color:var(--dim);margin-top:6px}
   .inv b{color:var(--ink)}
-  #log{height:300px;overflow:auto;font-size:13px;padding-right:4px}
+  #log{flex:1;overflow:auto;font-size:13px;padding-right:4px;min-height:200px}
   #log .e{margin:0 0 5px;border-left:2px solid transparent;padding-left:7px}
   #log .good{border-color:var(--good)}
   #log .bad{border-color:var(--bad);color:#ffb3b3}
@@ -45,6 +41,17 @@
   #log .sys{border-color:var(--dim);color:var(--dim)}
   #log .llm{border-color:var(--key);color:#d9c2ff}
   #log .you{border-color:#2a4a3a;color:#bfeed4}
+  .jsub{color:var(--dim);font-size:11px;margin:-4px 0 8px}
+  #journal{flex:1;overflow:auto;font-size:12.5px;padding-right:4px}
+  .jempty{color:var(--dim);font-style:italic;padding:8px 0}
+  .jnode{border:1px solid var(--line);border-left:2px solid var(--good);border-radius:5px;
+    padding:6px 9px;margin-bottom:6px;cursor:pointer;background:#08130d}
+  .jnode:hover{border-color:var(--ink)}
+  .jnode .jt{color:var(--ink)}
+  .jnode .jtag{float:right;color:var(--dim);font-size:10px;text-transform:uppercase;letter-spacing:.5px}
+  .jnode .jdetail{display:none;margin-top:6px;color:#bfeed4;line-height:1.5;white-space:pre-wrap}
+  .jnode.open .jdetail{display:block}
+  .jnode .jlinks{color:var(--dim);font-size:11px;margin-top:5px}
   #input{display:flex;gap:8px;margin-top:12px}
   #input input{flex:1;background:#0c2018;color:var(--ink);border:1px solid var(--line);
     border-radius:6px;padding:9px 11px;font:inherit}
@@ -54,16 +61,6 @@
   #input button:disabled{opacity:.5;cursor:wait}
   .keys{margin-top:8px;color:var(--dim);font-size:12px}
   kbd{background:#0c2018;border:1px solid var(--line);border-radius:4px;padding:0 5px}
-  .api{background:#0c1a14;border:1px dashed var(--line);border-radius:6px;padding:10px;margin-bottom:12px;font-size:12.5px;color:#bfeed4}
-  .api input{width:320px;max-width:60%;background:#0c2018;color:var(--ink);border:1px solid var(--line);
-    border-radius:6px;padding:6px 9px;font:inherit;margin-left:6px}
-  .api button{background:var(--ink);color:#06100c;border:none;border-radius:6px;padding:6px 12px;
-    font:inherit;cursor:pointer;margin-left:6px}
-  .api .note{color:var(--dim);margin-top:6px}
-  .sug{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
-  .sug button{background:#0c2018;color:var(--ink);border:1px solid var(--line);border-radius:14px;
-    padding:4px 10px;font:inherit;font-size:12px;cursor:pointer}
-  .sug button:hover{border-color:var(--ink)}
   .modal{position:fixed;inset:0;background:rgba(2,8,5,.85);display:flex;align-items:center;justify-content:center;z-index:50}
   .modal .box{max-width:560px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:20px}
   .modal h2{color:var(--good)}
@@ -78,36 +75,27 @@
     <div class="sub">a castaway's island · speak in plain language · the engine owns the truth, the voice narrates it</div>
   </header>
 
-  <div class="api" id="apiBar">
-    <span>OpenRouter key (stored only in this browser):</span>
-    <input id="apiKey" type="password" placeholder="sk-or-..." />
-    <button id="saveKey">Save</button>
-    <div class="note">
-      Uses the <b>openrouter/free</b> router — no cost. Without a key the game still runs via a built-in
-      offline parser. Eventually this moves to a Vercel function so the key never ships to the client.
-    </div>
-  </div>
-
   <div class="grid">
-    <div class="panel">
-      <h2>Island</h2>
-      <pre id="scene"></pre>
-      <div class="meters" id="meters"></div>
-      <div class="inv" id="inv"></div>
-      <div class="sug" id="sug"></div>
+    <div class="panel main">
+      <div class="place">
+        <pre id="scene"></pre>
+        <div class="meters" id="meters"></div>
+        <div class="inv" id="inv"></div>
+      </div>
+      <h2>The Watch</h2>
+      <div id="log"></div>
       <div id="input">
         <input id="cmd" placeholder="what do you do?" />
         <button id="go">Say</button>
-        <button id="contribute" title="Share this session's discoveries with the wider world (merged, rule-checked)">Contribute</button>
       </div>
       <div class="keys">
-        type in plain language · <kbd>Enter</kbd> to act · <kbd>R</kbd> restart ·
-        try <i>look</i>, <i>examine journal</i>, <i>what can I salvage from the wreck?</i>
+        type in plain language · <kbd>Enter</kbd> to act · <kbd>R</kbd> restart
       </div>
     </div>
-    <div class="panel">
-      <h2>Keeper's Log</h2>
-      <div id="log"></div>
+    <div class="panel side">
+      <h2>Your Journal</h2>
+      <div class="jsub">discoveries you've earned on the island</div>
+      <div id="journal"></div>
     </div>
   </div>
 </div>
@@ -378,13 +366,16 @@ async function pullLore(){
   }catch(e){ return { ok:false, why:"network error (using local + spec seed)" }; }
 }
 
-// Contribute action: push this session's discoveries to the shared world.
-async function contribute(){
-  pushLog("You offer what you've learned to the wider world…","sys");
+// Automatic contribution: at session end, push this session's discoveries to the
+// shared world (best-effort, silent). pushLore early-returns when there's nothing
+// new, so this costs at most one Redis write per played session. The offline floor
+// is untouched — if the server is unreachable, local memory is preserved.
+async function autoContribute(){
   const r = await pushLore();
-  if(r.ok) pushLog(`Shared ${r.pushed} discovery(ies) with the world.${r.skipped?(" ("+r.skipped+" skipped as off-rules)"):""}${r.note?(" "+r.note):""}`,"good");
-  else pushLog("Could not share just now: "+r.why+". Your local memory is safe.","warn");
-  render();
+  if(r.ok && r.pushed>0){
+    pushLog(`Your discoveries drift out with the tide — ${r.pushed} shared with those who come after.${r.skipped?(" ("+r.skipped+" held back as off-rules)"):""}`,"fog");
+  }
+  // failures are intentionally silent: sharing is a bonus, not a requirement.
 }
 
 function newGame(){
@@ -475,7 +466,6 @@ function applyAction(a){
     case "launch": return doLaunch();
     case "ask": return doAsk(a.target, a.say);
     case "eat": return doEat(a.target);
-    case "contribute": return { ok:true, async:true, run:contribute };
     case "wait": return doWait();
     default: return {ok:false, text:"The island does not record that action."};
   }
@@ -743,7 +733,6 @@ const ACTION_VERB = {
   launch:["launch","flee","sail","escape","set off","cast off","leave the island"],
   eat:["eat","drink","consume","taste"],
   look:["look","describe","where","what can i see","survey","scan"],
-  contribute:["contribute","share","offer to the world","sync my lore","commit my discoveries"],
   wait:["wait","rest","hold","pause","stay","sleep"]
 };
 
@@ -761,18 +750,25 @@ function offlineParse(text){
   for(const d of ["north","south","east","west","up","down","in","out"]){
     if(new RegExp("\\b"+d+"\\b").test(t)) return {action:"go", target:d};
   }
-  if(/contribute|share (my|this)|sync|offer to the world/.test(t)) return {action:"contribute", target:null, item:null, say:text};
   return {action:"look", target:null, item:null, say:text};
 }
 
-// Whitelisted model: most reliable free slug for JSON action parsing (see model sweep).
-// Falls back to offline parser if this is unavailable / key absent. OpenRouter rotates
-// free models, so re-validate before shipping; the offline parser is the guaranteed floor.
-const LLM_MODEL = "nvidia/nemotron-3-ultra-550b-a55b:free";
+// Proxy player LLM calls through the server so the OpenRouter key stays server-side.
+// Returns the model's text, or null on any failure (engine falls back to offline parser).
+async function callLLMProxy(system, user, maxTokens){
+  try{
+    const r = await fetch(API_BASE+"/llm",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({ system, user, maxTokens:maxTokens||200 })
+    });
+    if(!r.ok) return null;
+    const d = await r.json().catch(()=>({}));
+    return (d && d.content) || null;
+  }catch(e){ return null; }
+}
 
 async function callLLM(text){
-  const key = (document.getElementById("apiKey").value||"").trim();
-  if(!key) return null;
   // bounded retrieval: only the most relevant lore nodes for THIS context
   const ctx = text + " " + node().name + " " + (S.inv.map(itemName).join(" "));
   const relevant = LORE.retrieve(ctx, 6).map(n=>"- "+n.text).join("\n");
@@ -785,18 +781,8 @@ async function callLLM(text){
     `${SPEC.constraints.join(" ")} `+
     `Relevant world lore (retrieved, not exhaustive):\n${relevant}. `+
     `Current place: ${node().name}. Inventory: ${S.inv.map(itemName).join(", ")||"empty"}.`;
-  try{
-    const r = await fetch("https://openrouter.ai/api/v1/chat/completions",{
-      method:"POST",
-      headers:{"Authorization":`Bearer ${key}`,"Content-Type":"application/json","HTTP-Referer":"http://localhost"},
-      body: JSON.stringify({model:LLM_MODEL, max_tokens:200,
-        messages:[{role:"system",content:sys},{role:"user",content:text}]})
-    });
-    if(!r.ok) return null;
-    const d = await r.json();
-    const raw = (d.choices&&d.choices[0]&&d.choices[0].message&&d.choices[0].message.content)||"";
-    return extractJSON(raw);
-  }catch(e){ return null; }
+  const raw = await callLLMProxy(sys, text, 200);
+  return extractJSON(raw || "");
 }
 
 function extractJSON(raw){
@@ -816,25 +802,14 @@ function extractJSON(raw){
 
 // Generate a single consistent world fact (ecology/lore) answering `text`.
 async function genLore(text){
-  const key = (document.getElementById("apiKey").value||"").trim();
-  if(!key) return null;
   const ctx = text + " " + node().name;
   const relevant = LORE.retrieve(ctx, 5).map(n=>"- "+n.text).join("\n");
   const sys = `You are the world-builder for York: The Wreck of the Meridian, a castaway on an equatorial island (reef, palms, mangroves, feral goats, seabirds, jungle cats, parrots, sharks). `+
     `Answer the player's question with ONE concise factual sentence about the world, consistent with these hard constraints and existing lore. `+
     `Do NOT invent cold/volcanic life, magic, or anything contradicting the rules. Reply with ONLY the sentence, no preamble.\n`+
     `CONSTRAINTS: ${SPEC.constraints.join(" ")}\nEXISTING LORE:\n${relevant}`;
-  try{
-    const r = await fetch("https://openrouter.ai/api/v1/chat/completions",{
-      method:"POST",
-      headers:{"Authorization":`Bearer ${key}`,"Content-Type":"application/json","HTTP-Referer":"http://localhost"},
-      body: JSON.stringify({model:LLM_MODEL, max_tokens:120, messages:[{role:"system",content:sys},{role:"user",content:text}]})
-    });
-    if(!r.ok) return null;
-    const d = await r.json();
-    const c = (d.choices&&d.choices[0]&&d.choices[0].message&&(d.choices[0].message.content||"")).trim();
-    return c || null;
-  }catch(e){ return null; }
+  const c = await callLLMProxy(sys, text, 120);
+  return (c && c.trim()) || null;
 }
 
 // The engine's validator: a proposed new place must respect the rules before it is added.
@@ -857,21 +832,13 @@ function validateNewPlace(prop){
 
 // Generate a new place adjacent to the current node, validated before adding.
 async function genPlace(query){
-  const key = (document.getElementById("apiKey").value||"").trim();
-  if(!key) return { ok:false, why:"no LLM key set" };
   const sys = `You are expanding the map of York: The Wreck of the Meridian, a castaway on an equatorial island (reef, palms, mangroves). `+
     `The player is at "${node().name}". Propose ONE new place the player could discover here, consistent with the rules. `+
     `Return ONLY JSON: {"id":"snake_case_id","name":"Short Name","desc":"one sentence, equatorial island, no cold/volcanic life or magic","dirBack":"the exit key from the new place back to the current node (e.g. south)"}. `+
     `Rules: ${SPEC.constraints.join(" ")} Do not propose leaving the island (no mainland/ocean escape) unless the craft is already built.`;
   try{
-    const r = await fetch("https://openrouter.ai/api/v1/chat/completions",{
-      method:"POST",
-      headers:{"Authorization":`Bearer ${key}`,"Content-Type":"application/json","HTTP-Referer":"http://localhost"},
-      body: JSON.stringify({model:LLM_MODEL, max_tokens:200, messages:[{role:"system",content:sys},{role:"user",content:query||"What is there to discover here?"}]})
-    });
-    if(!r.ok) return { ok:false, why:"LLM unavailable" };
-    const d = await r.json();
-    const raw = (d.choices&&d.choices[0]&&d.choices[0].message&&(d.choices[0].message.content||""));
+    const raw = await callLLMProxy(sys, query||"What is there to discover here?", 200);
+    if(!raw) return { ok:false, why:"LLM unavailable" };
     const prop = extractJSON(raw);
     if(!prop) return { ok:false, why:"could not parse the proposed place" };
     // engine validates against the ruleset
@@ -937,14 +904,19 @@ async function playerTurn(text){
 /* ============================================================
    UI
    ============================================================ */
-function bar(cls,v,max){
-  const pct=Math.max(0,Math.min(100,(v/max)*100));
-  return `<div class="meter"><div class="lab"><span>${cls.toUpperCase()}</span><span>${v|0}</span></div>`+
-    `<div class="bar f-${cls}"><i style="width:${pct}%"></i></div></div>`;
+// Retro ASCII meter: LIFE [████░░░░░░] 80  (block chars fit the terminal vibe)
+function asciiMeter(label, v, max, width){
+  const pct = Math.max(0, Math.min(1, v/max));
+  const filled = Math.round(pct*width);
+  const bar = "█".repeat(filled) + "░".repeat(width-filled);
+  return `${label.padEnd(5).toUpperCase()} [${bar}] ${Math.round(v)}`;
 }
 function render(){
-  document.getElementById("meters").innerHTML =
-    bar("life",S.life,100)+bar("wreck",S.wreck,100)+bar("signal",S.signal,10)+bar("warmth",S.warmth,100);
+  document.getElementById("meters").textContent =
+    asciiMeter("life",S.life,100,10)+"\n"+
+    asciiMeter("wreck",S.wreck,100,10)+"\n"+
+    asciiMeter("signal",S.signal,10,10)+"\n"+
+    asciiMeter("warmth",S.warmth,100,10);
   const n=node();
   let inv = S.inv.length? S.inv.map(itemName).join(", ") : "empty";
   document.getElementById("inv").innerHTML = `Inventory: <b>${inv}</b> · Clock <b>${S.clock}/${WORLD.maxClock}</b> · Wreck <b>${S.wreck}</b>`;
@@ -952,18 +924,39 @@ function render(){
   const lg=document.getElementById("log");
   lg.innerHTML = S.log.slice(-80).map(e=>`<div class="e ${e.c}">${e.t}</div>`).join("");
   lg.scrollTop=lg.scrollHeight;
-  // suggestions
-  const sg=document.getElementById("sug");
-  const sugs = S.ended? [] :
-    ["look","examine journal","share my discoveries with the world","contribute","what can I salvage from the wreck?","walk north","read the journal"];
-  sg.innerHTML="";
-  for(const s of sugs){ const b=document.createElement("button"); b.textContent=s; b.onclick=()=>runCmd(s); sg.appendChild(b); }
+  renderJournal();
 }
+
+// Sidebar "Your Journal": the player's own discoveries (not the world-seeded
+// baseline). Click a node to expand its full text and the facts it links to.
+function renderJournal(){
+  const j = document.getElementById("journal");
+  if(!LORE){ j.innerHTML=""; return; }
+  const mine = Object.values(LORE.nodes).filter(n=> n.source==="play" || n.source==="generated");
+  if(!mine.length){ j.innerHTML = `<div class="jempty">No discoveries yet. Explore, examine, and ask — what you learn is recorded here.</div>`; return; }
+  // newest first
+  mine.sort((a,b)=> (b.turn||0)-(a.turn||0));
+  j.innerHTML = mine.map(n=>{
+    const links = LORE.edges.filter(e=>e.from===n.id).map(e=>LORE.nodes[e.to]).filter(Boolean);
+    const linkTxt = links.length? `<div class="jlinks">linked: ${links.map(l=>l.text).join(" · ")}</div>` : "";
+    const tag = (n.tags&&n.tags[0])||n.source;
+    return `<div class="jnode" data-id="${n.id}">`+
+      `<span class="jtag">${tag}</span>`+
+      `<div class="jt">${escapeHtml(n.text)}</div>`+
+      `<div class="jdetail">${escapeHtml(n.text)}${linkTxt}</div>`+
+    `</div>`;
+  }).join("");
+  for(const el of j.querySelectorAll(".jnode")){
+    el.onclick = ()=> el.classList.toggle("open");
+  }
+}
+function escapeHtml(s){ return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 function showEnd(title,body,cls){
   document.getElementById("endTitle").textContent=title;
   document.getElementById("endTitle").style.color = cls==="bad"?"var(--bad)":"var(--good)";
   document.getElementById("endBody").textContent=body;
   document.getElementById("endModal").style.display="flex";
+  autoContribute(); // share this session's discoveries with the wider world
 }
 
 function runCmd(text){
@@ -976,18 +969,8 @@ function runCmd(text){
 
 document.getElementById("go").onclick=()=>{ const v=document.getElementById("cmd").value.trim(); if(v) runCmd(v); };
 document.getElementById("cmd").addEventListener("keydown",e=>{ if(e.key==="Enter"){ const v=e.target.value.trim(); if(v) runCmd(v); } });
-document.getElementById("saveKey").onclick=()=>{
-  const k=document.getElementById("apiKey").value.trim();
-  if(k) localStorage.setItem("york_openrouter_key",k);
-  pushLog("Key saved to this browser. The game will use the LLM when it can, and fall back to the offline parser otherwise.","sys");
-  render();
-};
-document.getElementById("contribute").onclick=()=>{ if(!S.ended) contribute(); };
 document.getElementById("endAgain").onclick=()=>{ document.getElementById("endModal").style.display="none"; newGame(); };
 document.addEventListener("keydown",e=>{ if((e.key==="r"||e.key==="R") && !/input|textarea/i.test(e.target.tagName)){ document.getElementById("endModal").style.display="none"; newGame(); } });
-
-// restore key if present
-(function(){ const k=localStorage.getItem("york_openrouter_key"); if(k) document.getElementById("apiKey").value=k; })();
 
 // optional API base override (e.g. a deployed Vercel URL): set window.YORK_API_BASE first.
 // newGame (with shared-memory bootstrap) is called inside the IIFE below so API_BASE is set.

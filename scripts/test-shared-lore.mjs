@@ -129,6 +129,25 @@ function ok(cond, name) { if (cond) { pass++; console.log("  PASS", name); } els
      "GET reflects merged player fact");
 }
 
+// --- 7b. /api/llm proxy routes player calls through the server -----------
+{
+  const realFetch = globalThis.fetch;
+  process.env.OPENROUTER_API_KEY = "test-key";
+  globalThis.fetch = async () => ({
+    ok: true,
+    json: async () => ({ choices: [{ message: { content: '{"action":"look"}' } }] }),
+  });
+  const res = mkRes();
+  try {
+    await handler(mkReq("POST", "http://x/api/llm",
+      { system: "you interpret", user: "look around", maxTokens: 200 }), res);
+  } catch (e) { console.log("  7b threw:", e.message, "| res typeof:", typeof res, "| has status:", typeof res.status); }
+  ok(res.statusCode === 200 && res.body && res.body.ok === true && res.body.content === '{"action":"look"}',
+     "/api/llm proxies player call and returns content");
+  delete process.env.OPENROUTER_API_KEY;
+  globalThis.fetch = realFetch;
+}
+
 // --- 8. curator script diffs shared vs canonical ---------------------------
 {
   // run curator against local fallback (no --api)
