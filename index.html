@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>YORK — The Wreck of the Meridian</title>
+<title>THE GRAY LIGHT: WRECK OF THE MERIDIAN</title>
 <style>
   :root{
     --bg:#06100c; --ink:#7dffb0; --dim:#3f7a5d; --bad:#ff6b6b; --warn:#ffd166;
@@ -32,7 +32,7 @@
   .meters{white-space:pre;font-size:13px;line-height:1.5;margin:10px 0 4px;color:var(--ink)}
   .inv{font-size:12px;color:var(--dim);margin-top:6px}
   .inv b{color:var(--ink)}
-  #log{flex:1;overflow:auto;font-size:13px;padding-right:4px;min-height:200px}
+  #log{flex:1;overflow:auto;font-size:13px;padding-right:4px;min-height:200px;display:flex;flex-direction:column-reverse}
   #log .e{margin:0 0 5px;border-left:2px solid transparent;padding-left:7px}
   #log .good{border-color:var(--good)}
   #log .bad{border-color:var(--bad);color:#ffb3b3}
@@ -76,8 +76,8 @@
 <body>
 <div id="app">
   <header>
-    <h1>YORK — THE WRECK OF THE MERIDIAN</h1>
-    <div class="sub">a castaway's island · speak in plain language · the engine owns the truth, the voice narrates it</div>
+    <h1>THE GRAY LIGHT</h1>
+    <div class="sub">WRECK OF THE MERIDIAN</div>
   </header>
 
   <div class="grid">
@@ -88,12 +88,12 @@
         <div class="inv" id="inv"></div>
       </div>
       <h2>The Watch</h2>
-      <div id="log"></div>
-      <div id="thinking" class="thinking" style="display:none"></div>
       <div id="input">
         <input id="cmd" placeholder="what do you do?" />
         <button id="go">Say</button>
       </div>
+      <div id="thinking" class="thinking" style="display:none"></div>
+      <div id="log"></div>
       <div class="keys">
         type in plain language · <kbd>Enter</kbd> to act · <kbd>R</kbd> restart
       </div>
@@ -127,7 +127,7 @@
    ============================================================ */
 const WORLD_DOC = {
   world_id: "meridian",
-  identity: { title:"The Wreck of the Meridian", tagline:"A castaway on a hostile shore. Loot the wreck before the sea takes it — then decide how you leave.", engine:"index.html" },
+  identity: { title:"The Gray Light: Wreck of the Meridian", tagline:"A castaway on a hostile shore. Loot the wreck before the sea takes it — then decide how you leave.", engine:"index.html" },
   constraints: [
     "Ecology is self-consistent with an equatorial castaway island: reef, palms, mangroves, feral goats, seabirds, jungle cats, parrots, sharks. No cold/temperate or volcanic life.",
     "SIGNAL vs CONCEAL: a signal (fire/pyre/light) raises rescue chance AND predator/wildlife attention; brighter signal = more of both. Staying dark and quiet is safe but unseen.",
@@ -237,7 +237,15 @@ let LORE = null;          // persistent LoreGraph, loaded from storage or seeded
    prompt never bloats. Persisted per world id across sessions.
    ============================================================ */
 const LORE_STORE_KEY = "york_lore_v1";
+const GAME_STATE_KEY = "york_state_v1";
 const WORLD_ID = "meridian";
+
+function saveState(){
+  try{ localStorage.setItem(GAME_STATE_KEY, JSON.stringify(S)); }catch(e){}
+}
+function loadState(){
+  try{ return JSON.parse(localStorage.getItem(GAME_STATE_KEY) || "null"); }catch(e){ return null; }
+}
 
 function LoreGraph(){
   this.nodes = {};        // id -> node
@@ -396,6 +404,18 @@ function newGame(){
     ended: false, endKind: null,
     log: []
   };
+  // restore full game state from localStorage (persists across refresh)
+  const saved = loadState();
+  if(saved){
+    Object.assign(S, saved);
+    // ensure arrays/objects are proper
+    S.inv = S.inv || [];
+    S.flags = S.flags || {};
+    S.tame = S.tame || { cat:0, parrot:0 };
+    S.salvaged = S.salvaged || {};
+    S.visited = S.visited || {};
+    S.log = S.log || [];
+  }
   // load persistent lore graph if present (extends across sessions), else seed
   LORE = loadLore() || new LoreGraph();
   seedLore(LORE, WORLD_DOC); // idempotent: only adds absent baseline nodes
@@ -403,7 +423,6 @@ function newGame(){
   pushLog("The Meridian is kindling on the reef. You crawl ashore on the Shingle Beach, the only soul left of her.","sys");
   pushLog("The wreck will not last the day. Salvage what you can — then decide how you leave this place.","sys");
   // bootstrap from the SHARED world (best-effort; offline floor = local + spec seed).
-  // fire-and-forget: graph enriches as it arrives; persisted for next session.
   pullLore().then(r=>{
     if(r.ok && r.added>0){
       pushLog(`The wider world remembers ${r.added} thing(s) others learned here.`,"fog");
@@ -413,7 +432,7 @@ function newGame(){
   render();
 }
 
-function pushLog(t,cls){ S.log.push({t:String(t),c:cls||""}); }
+function pushLog(t,cls){ S.log.push({t:String(t),c:cls||""}); saveState(); }
 
 /* ---- deterministic spatial + state helpers (used by engine AND LLM validation) ---- */
 function node(){ return WORLD.nodes[S.loc]; }
@@ -743,19 +762,82 @@ const ACTION_VERB = {
 };
 
 function offlineParse(text){
-  const t=text.toLowerCase().trim();
-  for(const [act,verbs] of Object.entries(ACTION_VERB)){
-    for(const v of verbs){
-      if(t.startsWith(v+" ")||t===v||(" "+t).includes(" "+v+" ")){
-        let rest=t.slice(t.indexOf(v)+v.length).replace(/^( me | the | a | an | to | towards | into | in | up | down | north | south | east | west | at | my | of )+/g,"").trim();
-        return {action:act, target:rest||null, item:rest||null, say:text};
-      }
-    }
+  const t = text.toLowerCase().trim();
+  
+  // 1. Questions → ask (preserve full question as say, topic from first keyword)
+  if(t.endsWith("?") || /^(what|where|how|why|who|is there|can i|do i|did i|should i|would i|could i)\b/.test(t)){
+    const topicMatch = t.match(/^(what|where|how|why|who|is there|can i|do i|did i|should i|would i|could i)\b\s*(.+)/i);
+    const topic = topicMatch ? topicMatch[2].replace(/\?$/,"").trim() : t.replace(/\?$/,"").trim();
+    return {action:"ask", target:topic||"general", item:null, say:text};
   }
-  // directional shorthand
-  for(const d of ["north","south","east","west","up","down","in","out"]){
-    if(new RegExp("\\b"+d+"\\b").test(t)) return {action:"go", target:d};
+  
+  // 2. Salvage everything / all → ask for clarification
+  if(/\bsalvage\s+(everything|all|it all)\b/.test(t)){
+    return {action:"ask", target:null, item:null, say:"What do you want to salvage from the wreck? Categories: tools, sailcloth, provisions, rifle, radio."};
   }
+  
+  // 3. Explicit movement
+  const moveMatch = t.match(/^(go|walk|head|run|move)\s+(north|south|east|west|up|down|in|out|northwest|northeast|southwest|southeast)\b/);
+  if(moveMatch) return {action:"go", target:moveMatch[2], item:null, say:text};
+  
+  // Direction-only shorthand
+  for(const d of ["north","south","east","west","up","down","in","out","northwest","northeast","southwest","southeast"]){
+    if(new RegExp("\\b"+d+"\\b").test(t)) return {action:"go", target:d, item:null, say:text};
+  }
+  
+  // 4. Swim/wade/cross → ask for direction
+  if(/\b(swim|wade|cross)\s+to\b/.test(t)){
+    const dest = t.match(/\b(swim|wade|cross)\s+to\s+(.+)$/);
+    return {action:"ask", target:dest?dest[2]:"unknown", item:null, say:text};
+  }
+  
+  // 5. Look/describe
+  if(/\b(look around|describe|where am i|what can i see|survey|scan|look$)\b/.test(t)){
+    return {action:"look", target:null, item:null, say:text};
+  }
+  
+  // 6. Examine
+  const examineMatch = t.match(/\b(examine|look at|inspect|read|check)\s+(.+)$/);
+  if(examineMatch) return {action:"examine", target:examineMatch[2].trim(), item:null, say:text};
+  
+  // 7. Take
+  const takeMatch = t.match(/\b(take|pick up|get|grab)\s+(.+)$/);
+  if(takeMatch) return {action:"take", target:takeMatch[2].trim(), item:null, say:text};
+  
+  // 8. Salvage category (match actual engine categories)
+  const salvageMatch = t.match(/\bsalvage\s+(tools|sailcloth|provisions|rifle|radio)\b/);
+  if(salvageMatch) return {action:"salvage", target:salvageMatch[1], item:null, say:text};
+  
+  // 9. Use
+  const useMatch = t.match(/\buse\s+(.+?)(?:\s+on\s+(.+))?$/);
+  if(useMatch) return {action:"use", target:useMatch[2]||null, item:useMatch[1].trim(), say:text};
+  
+  // 10. Build/craft
+  const buildMatch = t.match(/\b(build|craft)\s+(.+)$/);
+  if(buildMatch) return {action:"build", target:buildMatch[2].trim(), item:null, say:text};
+  
+  // 11. Signal
+  if(/\b(signal|light signal|make signal|build signal)\b/.test(t)){
+    return {action:"signal", target:null, item:null, say:text};
+  }
+  
+  // 12. Tame
+  const tameMatch = t.match(/\b(tame|befriend)\s+(.+)$/);
+  if(tameMatch) return {action:"tame", target:tameMatch[2].trim(), item:null, say:text};
+  
+  // 13. Launch
+  const launchMatch = t.match(/\blaunch\s+(?:the\s+)?(.+)$/);
+  if(launchMatch) return {action:"launch", target:launchMatch[1].trim(), item:null, say:text};
+  
+  // 14. Eat
+  const eatMatch = t.match(/\b(eat|drink|consume)\s+(.+)$/);
+  if(eatMatch) return {action:"eat", target:eatMatch[2].trim(), item:null, say:text};
+  
+  // 15. Wait
+  if(/\b(wait|rest|sleep|pass time|hold)\b/.test(t)){
+    return {action:"wait", target:null, item:null, say:text};
+  }
+  
   return {action:"look", target:null, item:null, say:text};
 }
 
@@ -809,15 +891,52 @@ async function callLLM(text){
   // bounded retrieval: only the most relevant lore nodes for THIS context
   const ctx = text + " " + node().name + " " + (S.inv.map(itemName).join(" "));
   const relevant = LORE.retrieve(ctx, 6).map(n=>"- "+n.text).join("\n");
-  const sys = `You are the interpreter for a text adventure called York: The Wreck of the Meridian, a castaway survival game. `+
-    `Convert the player's plain-language command into a JSON action object. `+
-    `Strict schema: {"action": one of [go,take,examine,salvage,use,build,signal,tame,launch,eat,ask,look,wait], `+
-    `"target": string|null (thing, cargo category, direction, or companion), "item": string|null (item used), "say": string|null (words spoken)}. `+
-    `Respond with ONLY the JSON object, no markdown, no commentary. `+
-    `RULES PRECEDENCE — you MUST obey these; never contradict them, never let player intent override them: `+
-    `${SPEC.constraints.join(" ")} `+
-    `Relevant world lore (retrieved, not exhaustive):\n${relevant}. `+
-    `Current place: ${node().name}. Inventory: ${S.inv.map(itemName).join(", ")||"empty"}.`;
+  const sys = `You are the interpreter for a text adventure called York: The Wreck of the Meridian, a castaway survival game.
+Convert the player's plain-language command into a JSON action object.
+Strict schema: {"action": one of [go,take,examine,salvage,use,build,signal,tame,launch,eat,ask,look,wait], "target": string|null (thing, cargo category, direction, or companion), "item": string|null (item used), "say": string|null (words spoken)}.
+Respond with ONLY the JSON object, no markdown, no commentary.
+
+RULES PRECEDENCE — you MUST obey these; never contradict them, never let player intent override them:
+${SPEC.constraints.join(" ")}
+Relevant world lore (retrieved, not exhaustive):
+${relevant}.
+Current place: ${node().name}. Inventory: ${S.inv.map(itemName).join(", ")||"empty"}.
+
+CRITICAL INTERPRETATION RULES (follow in order; first match wins):
+1. QUESTIONS: Input ends with "?" OR starts with "what/where/how/why/who/is there/can i/do i/did i/should i/would i/could i" → action:"ask", target:the topic, say:the full question. Do NOT map to look/examine/go.
+   Examples: "where can i go?" → {"action":"ask","target":"directions","say":"where can i go?"}
+             "can i swim to the wreck?" → {"action":"ask","target":"swimming","say":"can i swim to the wreck?"}
+             "what fish are here?" → {"action":"ask","target":"fish","say":"what fish are here?"}
+
+2. SALVAGE CLARIFICATION: "salvage everything" / "salvage all" / "salvage it all" → action:"ask", say:"What do you want to salvage from the wreck? Categories: provisions, tools, materials, arms, personal."
+
+3. EXPLICIT MOVEMENT VERBS: "go north", "walk south", "head east", "north", "south", "east", "west", "up", "down", "northwest", etc. → action:"go", target:direction.
+
+4. SWIM/WADE/CROSS are NOT directions. If the player says "swim to [place]" or "wade to [place]", map to the correct direction FROM the current place that leads toward that place, OR action:"ask", target:the place, say:"How do I get to the [place]?". Do NOT use "wreck"/"island"/etc. as directions.
+
+5. LOOK/DESCRIBE: "look around", "describe", "where am i", "what can i see", "survey", "scan" → action:"look".
+
+6. EXAMINE: "examine [thing]", "look at [thing]", "inspect [thing]", "read [thing]", "check [thing]" → action:"examine", target:thing.
+
+7. TAKE: "take [thing]", "pick up [thing]", "get [thing]", "grab [thing]" → action:"take", target:thing.
+
+8. SALVAGE CATEGORY: "salvage tools", "salvage sailcloth", "salvage provisions", "salvage rifle", "salvage radio" → action:"salvage", target:category.
+
+9. USE: "use [thing] on [target]", "use [thing]" → action:"use", item:thing, target:target|null.
+
+10. BUILD/CRAFT: "build [thing]", "craft [thing]" → action:"build", target:thing.
+
+11. SIGNAL: "signal", "light signal", "make signal", "build signal" → action:"signal".
+
+12. TAME: "tame [companion]", "befriend [companion]" → action:"tame", target:companion.
+
+13. LAUNCH: "launch [craft]", "launch the [craft]" → action:"launch", target:craft.
+
+14. EAT: "eat [food]", "drink [food]", "consume [food]" → action:"eat", target:food.
+
+15. WAIT: "wait", "rest", "sleep", "pass time", "hold" → action:"wait".
+
+16. AMBIGUOUS/UNKNOWN: action:"look".`;
   const { content, status } = await callLLMProxy(sys, text, 200);
   return { parsed: extractJSON(content || ""), status };
 }
@@ -990,8 +1109,8 @@ function render(){
   document.getElementById("inv").innerHTML = `Inventory: <b>${inv}</b> · Clock <b>${S.clock}/${WORLD.maxClock}</b> · Wreck <b>${S.wreck}</b>`;
   document.getElementById("scene").textContent = (S.ended? "—" : `— ${n.name} —\n${n.desc}`);
   const lg=document.getElementById("log");
-  lg.innerHTML = S.log.slice(-80).map(e=>`<div class="e ${e.c}">${e.t}</div>`).join("");
-  lg.scrollTop=lg.scrollHeight;
+  lg.innerHTML = S.log.slice(-80).reverse().map(e=>`<div class="e ${e.c}">${e.t}</div>`).join("");
+  lg.scrollTop=0;
   renderJournal();
 }
 
