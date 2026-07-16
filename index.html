@@ -458,6 +458,61 @@ function canTravel(dir){
 function hasItem(id){ return S.inv.includes(id); }
 function itemName(id){ return (WORLD.items[id]&&WORLD.items[id].name)||id; }
 
+// Register a new item dynamically in WORLD.items (for organic discovery)
+function registerItem(id, name, desc, tags){
+  if(!WORLD.items[id]){
+    WORLD.items[id] = { name, desc, tags: tags||[] };
+  }
+  return WORLD.items[id];
+}
+
+// Extract potential items from a lore fact and register them
+function extractItemsFromLore(fact){
+  const lowerFact = fact.toLowerCase();
+  
+  // Common item patterns the LLM might generate
+  const itemPatterns = [
+    // "there are X here" / "you see X" / "X lies here"
+    /\b(?:there (?:are|is)|you (?:see|notice|spot)|lies?|sits?|rests?)\s+(?:a|an|some|the)?\s*([a-z][a-z\s\-]+?)(?:\s+(?:here|there|on the|near|by|around))?\b/gi,
+    // "X, Y, and Z" lists
+    /\b([a-z][a-z\s\-]+?)(?:,|\s+and\s+|\.\s*|\?\s*)/gi,
+  ];
+  
+  const foundItems = new Set();
+  
+  for(const pattern of itemPatterns){
+    let match;
+    while((match = pattern.exec(lowerFact)) !== null){
+      const candidate = match[1]?.trim();
+      if(candidate && candidate.length > 2 && candidate.length < 50){
+        // Filter out non-items (locations, actions, etc.)
+        if(!/^(the|this|that|there|here|where|what|when|why|how|you|your|the island|the beach|the jungle|the wreck|the reef|the cliff|the cove|the camp|the spring|a jungle|a beach|a wreck|a reef|a cliff|cove|camp|spring|jungle|beach|wreck|reef|cliff)$/i.test(candidate)){
+          // Normalize: lowercase, replace spaces with underscores
+          const id = candidate.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+          if(id && !WORLD.items[id] && !foundItems.has(id)){
+            foundItems.add(id);
+            // Generate a basic description from the fact context
+            const desc = `Discovered: ${fact.slice(0, 150)}...`;
+            registerItem(id, candidate, desc, ['generated', 'lore']);
+          }
+        }
+      }
+    }
+  }
+  
+  // Also check for specific known categories
+  const knownCategories = ['pebble', 'pebbles', 'shingle', 'driftwood', 'debris', 'shell', 'shellfish', 'crab', 'coconut', 'palm', 'bamboo', 'fig', 'goat', 'feather', 'bone', 'stone', 'rock', 'vine', 'root', 'fruit', 'seed', 'nut', 'leaf', 'branch', 'log', 'stick', 'twig', 'sand', 'gravel', 'coral', 'seaweed', 'kelp', 'fish', 'bird', 'egg', 'nest', 'track', 'trail', 'sign', 'marking'];
+  
+  for(const cat of knownCategories){
+    if(lowerFact.includes(cat)){
+      const id = cat.replace(/s$/, ''); // singularize
+      if(!WORLD.items[id]){
+        registerItem(id, cat, `Discovered from lore: ${fact.slice(0, 150)}...`, ['generated', 'lore']);
+      }
+    }
+  }
+}
+
 /* ---- resolve a natural-language direction/target to an exit key ---- */
 function normalizeDir(t, exitKeys){
   if(!t) return null;
@@ -515,15 +570,16 @@ function maybeAddLoreItemsToLocation(fact){
   const n = node();
   if(!n.items) n.items = [];
   
-  // Common beach items that the LLM might mention
-  const beachItems = ["driftwood", "pebbles", "shingle", "debris", "seabirds", "goats", "crab", "shellfish"];
-  const lowerFact = fact.toLowerCase();
+  // Extract items from the lore fact dynamically
+  extractItemsFromLore(fact);
   
-  for(const item of beachItems){
-    if(lowerFact.includes(item) && !n.items.includes(item) && !hasItem(item)){
-      // Only add if it's a real item in WORLD.items or a valid forage item
-      if(WORLD.items[item] || (n.forage && n.forage === "food" && ["crab", "shellfish"].includes(item))){
-        n.items.push(item);
+  // Add any newly registered items that are mentioned in the fact to this location
+  const lowerFact = fact.toLowerCase();
+  for(const id of Object.keys(WORLD.items)){
+    const item = WORLD.items[id];
+    if(item.tags?.includes('generated') && lowerFact.includes(item.name.toLowerCase())){
+      if(!n.items.includes(id) && !hasItem(id)){
+        n.items.push(id);
       }
     }
   }
