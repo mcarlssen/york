@@ -3,6 +3,7 @@
     "api/lore.js": { "maxDuration": 30 }
   },
   "rewrites": [
-    { "source": "/api/lore", "destination": "/api/lore.js" }
+    { "source": "/api/lore", "destination": "/api/lore.js" },
+    { "source": "/api/llm", "destination": "/api/lore.js" }
   ]
 }
