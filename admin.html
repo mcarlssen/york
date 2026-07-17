@@ -142,14 +142,17 @@
 <script>
 "use strict";
 
-const API_BASE = "/api";
+const API_BASE = (typeof window !== "undefined" && window.YORK_API_BASE) || "/api";
 const WORLD = "meridian";
-const CANON_PATH = "openspec/world/world.json";
+const CANON_PATHS = [
+  "openspec/world/world.json",           // Vercel static serve
+  "https://raw.githubusercontent.com/mike-thorn/york/main/openspec/world/world.json" // GitHub raw fallback
+];
 
 let allNodes = [];
 let canonTexts = [];
-let sessionAccepted = new Set(); // node IDs accepted this session
-let sessionRejected = new Set(); // node IDs rejected this session
+const sessionAccepted = new Set();
+const sessionRejected = new Set();
 
 // --- Helpers ---
 function escapeHtml(s){ return String(s).replace(/[&<>"]/g,c=>({"&":"&","<":"<",">":">",'"':"""}[c])); }
@@ -179,23 +182,28 @@ function showToast(msg, cls){
 
 // --- Data Loading ---
 async function loadCanonTexts(){
-  try{
-    const r=await fetch(CANON_PATH);
-    if(!r.ok) throw new Error("Failed to load canon");
-    const doc=await r.json();
-    const texts=[];
-    for(const e of (doc.lore_seed||[])) texts.push(e.object||e.subject||"");
-    const eco=doc.ecology||{};
-    for(const k of ["climate","terrain","flora","fauna","threats"]){
-      const v=eco[k];
-      if(Array.isArray(v)) v.forEach(x=>texts.push(x));
-      else if(v) texts.push(v);
+  for(const path of CANON_PATHS){
+    try{
+      const r=await fetch(path);
+      if(!r.ok) continue;
+      const doc=await r.json();
+      const texts=[];
+      for(const e of (doc.lore_seed||[])) texts.push(e.object||e.subject||"");
+      const eco=doc.ecology||{};
+      for(const k of ["climate","terrain","flora","fauna","threats"]){
+        const v=eco[k];
+        if(Array.isArray(v)) v.forEach(x=>texts.push(x));
+        else if(v) texts.push(v);
+      }
+      canonTexts=texts;
+      console.log(`Loaded canon from: ${path}`);
+      return;
+    }catch(e){
+      console.warn(`Failed to load canon from ${path}:`,e);
     }
-    canonTexts=texts;
-  }catch(e){
-    console.warn("Could not load canon texts:",e);
-    canonTexts=[];
   }
+  console.warn("All canon paths failed");
+  canonTexts=[];
 }
 
 function isInCanon(text){
