@@ -140,9 +140,10 @@ export { validateNode, semanticConflict, forbiddenTerms, canonContext };
 // { content }. Any failure returns { content: null } so the engine falls back to its
 // offline parser. The interpreter/generator/predict models are configurable via
 // YORK_LLM_MODEL (defaults to the engine's pinned free slug).
+// Returns { content, status, code }. status: ok | empty | rate_limit | server_error | no_key
 async function callOpenRouter(system, user, maxTokens) {
   const key = process.env.OPENROUTER_API_KEY;
-  if (!key) return null;
+  if (!key) return { content: null, status: "no_key", code: 0 };
   const model = process.env.YORK_LLM_MODEL || "nvidia/nemotron-3-ultra-550b-a55b:free";
   try {
     const r = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -153,11 +154,13 @@ async function callOpenRouter(system, user, maxTokens) {
         { role: "user", content: user },
       ] }),
     });
-    if (!r.ok) return null;
+    if (r.status === 429) return { content: null, status: "rate_limit", code: 429 };
+    if (!r.ok) return { content: null, status: "server_error", code: r.status };
     const d = await r.json();
-    return (d.choices && d.choices[0] && d.choices[0].message && (d.choices[0].message.content || "")) || null;
+    const content = (d.choices && d.choices[0] && d.choices[0].message && (d.choices[0].message.content || "")) || null;
+    return { content, status: content ? "ok" : "empty", code: r.status };
   } catch {
-    return null;
+    return { content: null, status: "server_error", code: 0 };
   }
 }
 // Vercel KV was sunset; Upstash Redis (or Redis) is the supported store. Set
@@ -271,8 +274,11 @@ export default async function handler(req, res) {
     let body;
     try { body = typeof req.body === "string" ? JSON.parse(req.body) : req.body; }
     catch { return res.status(400).json({ ok: false, why: "invalid JSON body" }); }
-    const content = await callOpenRouter(body.system, body.user, body.maxTokens);
-    return res.status(200).json({ ok: true, content });
+    const out = await callOpenRouter(body.system, body.user, body.maxTokens);
+    if (out.status === "rate_limit") return res.status(429).json({ ok: false, content: null, why: "rate_limit" });
+    if (out.status === "no_key") return res.status(503).json({ ok: false, content: null, why: "no_key" });
+    if (out.status === "server_error") return res.status(502).json({ ok: false, content: null, why: "upstream", code: out.code });
+    return res.status(200).json({ ok: true, content: out.content });
   }
 
   return res.status(404).json({ ok: false, why: "not found" });

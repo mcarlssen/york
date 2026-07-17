@@ -4,92 +4,8 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>THE GRAY LIGHT: WRECK OF THE MERIDIAN</title>
-<style>
-  :root{
-    --bg:#06100c; --ink:#7dffb0; --dim:#3f7a5d; --bad:#ff6b6b; --warn:#ffd166; --banner:#d9b256;
-    --good:#9bffce; --fog:#9bb7ff; --panel:#0a1812; --line:#16352a; --key:#c08bff;
-  }
-  *{box-sizing:border-box}
-  html,body{margin:0;height:100%}
-  body{
-    background:var(--bg); color:var(--ink);
-    font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace;
-    font-size:14px; line-height:1.45;
-    background-image:repeating-linear-gradient(0deg,rgba(125,255,176,.035) 0 1px,transparent 1px 3px);
-  }
-  #app{width:100%;min-width:1040px;margin:0;padding:14px 150px;height:100%;display:flex;flex-direction:column;overflow:hidden;box-sizing:border-box}
-  header{border-bottom:1px solid var(--line);padding-bottom:8px;margin-bottom:12px;flex-shrink:0}
-  h1{color:var(--fog);font-size:18px;margin:0;letter-spacing:2px;text-shadow:0 0 8px rgba(125,255,176,.4)}
-  .sub{color:var(--dim);font-size:12px;margin-top:2px}
-  .grid{display:grid;grid-template-columns:1.55fr .85fr;gap:14px;align-items:stretch;flex:1;min-height:0}
-  @media(max-width:780px){
-    #app{min-width:0}
-    .grid{grid-template-columns:1fr;overflow:auto}
-  }
-  .panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px}
-  .panel.main{display:flex;flex-direction:column;min-height:0;height:100%;overflow:hidden}
-  .side-col{display:flex;flex-direction:column;gap:14px;min-height:0;height:100%;overflow:hidden}
-  .panel.side{display:flex;flex-direction:column;min-height:0;overflow:hidden}
-  .panel.side.inv{flex-shrink:0}
-  .panel.side.journal{flex:1;min-height:0}
-  .panel h2{font-size:12px;letter-spacing:1px;color:var(--banner);margin:0 0 8px;text-transform:uppercase;flex-shrink:0}
-  #status{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-bottom:12px;flex-shrink:0}
-  #status h2{font-size:12px;letter-spacing:1px;color:var(--dim);margin:0 0 6px;text-transform:uppercase}
-  #meters{display:flex;flex-wrap:wrap;gap:8px 16px;font-size:12px;line-height:1.3;color:var(--ink);margin:0}
-  .meter{flex:1 1 140px;display:flex;align-items:center;gap:8px;min-width:0}
-  .meter-label{flex:0 0 auto;width:3.6em;letter-spacing:.5px;color:var(--dim);text-transform:uppercase;font-size:11px}
-  .meter-track{flex:1 1 auto;min-width:48px;height:10px;background:#0c2018;border:1px solid var(--line);border-radius:2px;overflow:hidden}
-  .meter-fill{height:100%;background:var(--ink);box-shadow:0 0 6px rgba(125,255,176,.35);transition:width .2s ease}
-  .meter-val{flex:0 0 auto;min-width:2.2em;text-align:right;font-variant-numeric:tabular-nums}
-  .mapbox{background:#08130d;border:1px solid var(--line);border-radius:6px;padding:20px 12px;margin-bottom:10px;flex-shrink:0}
-  .invbox{background:#08130d;border:1px solid var(--line);border-radius:6px;padding:10px 12px;flex-shrink:0}
-  pre#scene{white-space:pre-wrap;margin:0;min-height:40px}
-  #inv{font-size:12.5px;color:var(--dim);line-height:1.5}
-  #inv b{color:var(--ink)}
-  #inv .empty{font-style:italic}
-  #log{flex:1;overflow-y:auto;overflow-x:hidden;font-size:13px;padding-right:4px;min-height:0}
-  #log .e{margin:0 0 5px;border-left:2px solid transparent;padding-left:7px}
-  #log .good{border-color:var(--good)}
-  #log .bad{border-color:var(--bad);color:#ffb3b3}
-  #log .warn{border-color:var(--warn);color:#ffe2a3}
-  #log .fog{border-color:var(--fog);color:#c3d2ff}
-  #log .sys{border-color:var(--dim);color:var(--dim)}
-  #log .llm{border-color:var(--key);color:#d9c2ff}
-  #log .you{border-color:#2a4a3a;color:#bfeed4}
-  .jsub{color:var(--dim);font-size:11px;margin:-4px 0 8px;flex-shrink:0}
-  #journal{flex:1;overflow-y:auto;overflow-x:hidden;font-size:12.5px;padding-right:4px;min-height:0}
-  .jempty{color:var(--dim);font-style:italic;padding:8px 0}
-  .jnode{border:1px solid var(--line);border-left:2px solid var(--good);border-radius:5px;
-    padding:6px 9px;margin-bottom:6px;cursor:pointer;background:#08130d}
-  .jnode:hover{border-color:var(--ink)}
-  .jnode .jt{color:var(--ink)}
-  .jnode .jtag{float:right;color:var(--dim);font-size:10px;text-transform:uppercase;letter-spacing:.5px}
-  .jnode .jdetail{display:none;margin-top:6px;color:#bfeed4;line-height:1.5;white-space:pre-wrap}
-  .jnode.open .jdetail{display:block}
-  .jnode .jlinks{color:var(--dim);font-size:11px;margin-top:5px}
-  #input{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;flex-shrink:0}
-  #input input{flex:1;min-width:200px;background:#0c2018;color:var(--ink);border:1px solid var(--line);
-    border-radius:6px;padding:10px 11px;margin-bottom:10px;font:inherit}
-  #input input:focus{outline:none;border-color:var(--ink)}
-  #input button{background:var(--dim);color:#1a0f2e;border:none;border-radius:6px;
-    padding:8px 12px; margin-bottom:10px; font:inherit;font-weight:600;cursor:pointer;white-space:nowrap}
-  #input button:disabled{opacity:.5;cursor:wait}
-  #copyChat{background:transparent;color:var(--dim);border:1px solid var(--line);padding:8px;display:inline-flex;align-items:center;justify-content:center;line-height:0}
-  #copyChat svg{width:18px;height:18px;fill:currentColor;display:block}
-  #copyChat:hover{background:#0c2018;color:var(--fog);border-color:var(--fog)}
-  .thinking{color:var(--fog);font-size:12.5px;font-style:italic;margin:8px 0 2px;letter-spacing:.3px;flex-shrink:0}
-  .thinking .dot{display:inline-block;animation:blink 1.1s steps(1) infinite}
-  .thinking .dot:nth-child(2){animation-delay:.18s}
-  .thinking .dot:nth-child(3){animation-delay:.36s}
-  @keyframes blink{0%,100%{opacity:.2}50%{opacity:1}}
-  .keys{margin-top:8px;color:var(--dim);font-size:12px;flex-shrink:0}
-  kbd{background:#0c2018;border:1px solid var(--line);border-radius:4px;padding:0 5px}
-  .modal{position:fixed;inset:0;background:rgba(2,8,5,.85);display:flex;align-items:center;justify-content:center;z-index:50}
-  .modal .box{max-width:560px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:20px}
-  .modal h2{color:var(--good)}
-  .modal p{white-space:pre-wrap;line-height:1.6}
-  .modal button{margin-top:14px;background:var(--ink);color:#06100c;border:none;border-radius:6px;padding:8px 16px;font:inherit;cursor:pointer}
-</style>
+<link rel="stylesheet" href="css/layout.css" />
+<link rel="stylesheet" href="css/styling.css" />
 </head>
 <body>
 <div id="app">
@@ -145,6 +61,7 @@
     <button id="endAgain">Begin a new watch (R)</button>
   </div>
 </div>
+<div id="toasts"></div>
 
 <script>
 "use strict";
@@ -369,9 +286,8 @@ function collectContributions(){
 // Returns null if acceptable, or a reason string if it must be dropped.
 function validateFactClient(text){
   const t = String(text||"").toLowerCase();
-  // world-specific escape rule is enforced server-side against live state; here we
-  // only block content that contradicts the static ecology/identity constraints.
-  if(/jungle|palm tree|tropical|coral reef|equator|magic portal|dragon|unicorn/.test(t))
+  // ponytail: equatorial world — block cold/magic only (was wrongly rejecting jungle/tropical)
+  if(/volcanic|glacier|polar|tundra|permafrost|ice sheet|magic portal|dragon|unicorn|wizard|fairy/.test(t))
     return "contradicts the world's ecology/identity constraints";
   return null;
 }
@@ -392,10 +308,16 @@ async function pushLore(){
       headers:{"Content-Type":"application/json"},
       body: JSON.stringify({ world:WORLD_ID, nodes:clean })
     });
-    if(!r.ok) return { ok:false, pushed:0, skipped, why:"server rejected ("+r.status+")" };
+    if(!r.ok){
+      toast("Share failed ("+r.status+").","err");
+      return { ok:false, pushed:0, skipped, why:"server rejected ("+r.status+")" };
+    }
     const d = await r.json().catch(()=>({}));
     return { ok:true, pushed: pushed, skipped: skipped, merged: d.merged||pushed, note:d.note||"" };
-  }catch(e){ return { ok:false, pushed:0, skipped, why:"network error (offline floor intact)" }; }
+  }catch(e){
+    toast("Share unreachable — local lore kept.","warn");
+    return { ok:false, pushed:0, skipped, why:"network error (offline floor intact)" };
+  }
 }
 
 async function pullLore(){
@@ -426,7 +348,6 @@ async function autoContribute(){
   if(r.ok && r.pushed>0){
     pushLog(`Your discoveries drift out with the tide — ${r.pushed} shared with those who come after.${r.skipped?(" ("+r.skipped+" held back as off-rules)"):""}`,"fog");
   }
-  // failures are intentionally silent: sharing is a bonus, not a requirement.
 }
 
 function newGame(freshStart = false){
@@ -492,57 +413,26 @@ function hasItem(id){ return S.inv.includes(id); }
 function itemName(id){ return (WORLD.items[id]&&WORLD.items[id].name)||id; }
 
 // Register a new item dynamically in WORLD.items (for organic discovery)
-function registerItem(id, name, desc, tags){
+function registerItem(id, name, desc, tags, opts){
+  opts = opts || {};
   if(!WORLD.items[id]){
-    WORLD.items[id] = { name, desc, tags: tags||[] };
+    WORLD.items[id] = { name, desc, tags: tags||[], portable: opts.portable!==false };
   }
   return WORLD.items[id];
 }
 
-// Extract potential items from a lore fact and register them
-function extractItemsFromLore(fact){
-  const lowerFact = fact.toLowerCase();
-  
-  // Common item patterns the LLM might generate
-  const itemPatterns = [
-    // "there are X here" / "you see X" / "X lies here"
-    /\b(?:there (?:are|is)|you (?:see|notice|spot)|lies?|sits?|rests?)\s+(?:a|an|some|the)?\s*([a-z][a-z\s\-]+?)(?:\s+(?:here|there|on the|near|by|around))?\b/gi,
-    // "X, Y, and Z" lists
-    /\b([a-z][a-z\s\-]+?)(?:,|\s+and\s+|\.\s*|\?\s*)/gi,
-  ];
-  
-  const foundItems = new Set();
-  
-  for(const pattern of itemPatterns){
-    let match;
-    while((match = pattern.exec(lowerFact)) !== null){
-      const candidate = match[1]?.trim();
-      if(candidate && candidate.length > 2 && candidate.length < 50){
-        // Filter out non-items (locations, actions, etc.)
-        if(!/^(the|this|that|there|here|where|what|when|why|how|you|your|the island|the beach|the jungle|the wreck|the reef|the cliff|the cove|the camp|the spring|a jungle|a beach|a wreck|a reef|a cliff|cove|camp|spring|jungle|beach|wreck|reef|cliff)$/i.test(candidate)){
-          // Normalize: lowercase, replace spaces with underscores
-          const id = candidate.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
-          if(id && !WORLD.items[id] && !foundItems.has(id)){
-            foundItems.add(id);
-            // Generate a basic description from the fact context
-            const desc = `Discovered: ${fact.slice(0, 150)}...`;
-            registerItem(id, candidate, desc, ['generated', 'lore']);
-          }
-        }
-      }
-    }
-  }
-  
-  // Also check for specific known categories
-  const knownCategories = ['pebble', 'pebbles', 'shingle', 'driftwood', 'debris', 'shell', 'shellfish', 'crab', 'coconut', 'palm', 'bamboo', 'fig', 'goat', 'feather', 'bone', 'stone', 'rock', 'vine', 'root', 'fruit', 'seed', 'nut', 'leaf', 'branch', 'log', 'stick', 'twig', 'sand', 'gravel', 'coral', 'seaweed', 'kelp', 'fish', 'bird', 'egg', 'nest', 'track', 'trail', 'sign', 'marking'];
-  
-  for(const cat of knownCategories){
-    if(lowerFact.includes(cat)){
-      const id = cat.replace(/s$/, ''); // singularize
-      if(!WORLD.items[id]){
-        registerItem(id, cat, `Discovered from lore: ${fact.slice(0, 150)}...`, ['generated', 'lore']);
-      }
-    }
+// Apply structured lore entities (portable → location items). Rejects meta strings.
+function applyEntities(entities){
+  const n = node();
+  if(!n.items) n.items = [];
+  for(const e of (entities||[])){
+    if(!e || !e.id || !e.name) continue;
+    const id = String(e.id).toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"");
+    if(!id || id.length>40) continue;
+    if(/constraint|concise|factual|magic|volcanic|should mention|need to keep/i.test(e.name+" "+(e.desc||""))) continue;
+    const portable = e.portable!==false;
+    registerItem(id, e.name, e.desc||("You notice "+e.name+" here."), ["generated","lore"], {portable});
+    if(portable && !n.items.includes(id) && !hasItem(id)) n.items.push(id);
   }
 }
 
@@ -550,24 +440,28 @@ function extractItemsFromLore(fact){
 function normalizeDir(t, exitKeys){
   if(!t) return null;
   let s = String(t).toLowerCase().trim();
-  s = s.replace(/^(to |the |a |an |into |towards |through |up |down |in |out |at )+/g,"").trim();
+  s = s.replace(/^(to |the |a |an |into |towards |toward |through |up |down |in |out |at )+/g,"").trim();
   const dirs = ["north_east","south_east","south_west","north_west","north","south","east","west","up","down","in","out",
                 "northeast","southeast","southwest","northwest"];
   for(const d of dirs){
     const plain = d.replace("_"," ");
-    if(s===d || s===plain || s.startsWith(d) || s.startsWith(plain) ||
+    if(s===d || s===plain || s.startsWith(d+" ") || s.startsWith(plain+" ") ||
        new RegExp("\\b"+plain.replace(/ /g,"\\s*")+"\\b").test(s))
       return d==="northeast"?"north_east":d==="southeast"?"south_east":d==="southwest"?"south_west":d==="northwest"?"north_west":d;
   }
-  // destination name match
+  // destination name / alias match against current exits
   for(const ek of exitKeys){
-    const name = WORLD.nodes[node().exits[ek]].name.toLowerCase();
-    const first = name.split(" ")[0];
-    if(name.replace(/ /g,"").includes(s.replace(/ /g,"")) || s.includes(first)) return ek;
+    const destId = node().exits[ek];
+    const dest = WORLD.nodes[destId];
+    if(!dest) continue;
+    const name = dest.name.toLowerCase();
+    const id = destId.toLowerCase().replace(/_/g," ");
+    const blob = name+" "+id;
+    if(blob.includes(s) || s.includes(name.split(" ")[0]) || s.includes(id.split(" ")[0])) return ek;
   }
-  // aliases
-  const alias = {tower:"north", cellar:"in", base:"south", lighthouse:"north", crypt:"down",
-                 chapel:"west", beach:"south", boathouse:"south_west"};
+  // place-aware aliases (current exits only)
+  const alias = {wreck:"east", meridian:"east", jungle:"north", cliff:"up", cove:"south", camp:"south_east",
+                 tide:"west", pool:"west", pools:"west", spring:"east", beach:"south"};
   for(const k in alias){ if(s.includes(k)){ const d=alias[k]; if(exitKeys.includes(d)) return d; } }
   return null;
 }
@@ -598,29 +492,12 @@ function warmthDelta(d){ S.warmth = Math.max(0, Math.min(100, S.warmth+d)); }
 function signalDelta(d){ S.signal = Math.max(0, Math.min(10, S.signal+d)); }
 function tameDelta(which,d){ S.tame[which]=Math.max(0,Math.min(10,S.tame[which]+d)); }
 
-// Extract interactable items from lore facts and add them to the current location
-function maybeAddLoreItemsToLocation(fact){
-  const n = node();
-  if(!n.items) n.items = [];
-  
-  // Extract items from the lore fact dynamically
-  extractItemsFromLore(fact);
-  
-  // Add any newly registered items that are mentioned in the fact to this location
-  const lowerFact = fact.toLowerCase();
-  for(const id of Object.keys(WORLD.items)){
-    const item = WORLD.items[id];
-    if(item.tags?.includes('generated') && lowerFact.includes(item.name.toLowerCase())){
-      if(!n.items.includes(id) && !hasItem(id)){
-        n.items.push(id);
-      }
-    }
-  }
-  
-  // If the fact mentions the wreck is visible, make sure wreck_shore is accessible
-  if(lowerFact.includes("wreck") && S.loc === "beach" && !WORLD.nodes.beach.exits.east){
-    WORLD.nodes.beach.exits.east = "wreck_shore";
-  }
+function singularize(s){
+  const t=String(s||"").toLowerCase().trim();
+  if(t.endsWith("ies") && t.length>4) return t.slice(0,-3)+"y";
+  if(t.endsWith("ses")||t.endsWith("xes")||t.endsWith("zes")) return t.slice(0,-2);
+  if(t.endsWith("s") && !t.endsWith("ss") && t.length>3) return t.slice(0,-1);
+  return t;
 }
 
 function describe(){
@@ -669,11 +546,28 @@ function doGo(t){
 }
 
 function matchItem(here, tgt){
-  const t=String(tgt).toLowerCase().replace(/_/g," ").trim();
-  return here.find(i=>!hasItem(i) && (i===t || itemName(i).toLowerCase()===t || itemName(i).toLowerCase().includes(t) || i.includes(t.replace(/ /g,"_"))));
+  const t=singularize(String(tgt).toLowerCase().replace(/_/g," ").trim());
+  return here.find(i=>{
+    if(hasItem(i)) return false;
+    const n=itemName(i).toLowerCase();
+    const id=i.replace(/_/g," ");
+    return i===t || id===t || singularize(n)===t || n.includes(t) || t.includes(singularize(n)) ||
+      i.includes(t.replace(/ /g,"_")) || singularize(id)===t;
+  });
 }
 function doTake(t){
   if(!t) return {ok:false, text:"Take what?"};
+  // multi-take: "fig and bamboo" / "fig, bamboo"
+  const parts = String(t).split(/\s+and\s+|,\s*/).map(x=>x.trim()).filter(Boolean);
+  if(parts.length>1){
+    const got=[], miss=[];
+    for(const p of parts){
+      const r=doTake(p);
+      if(r.ok) got.push(p); else miss.push(p);
+    }
+    if(got.length) return {ok:true, text:`You take: ${got.join(", ")}.${miss.length?(" Missing: "+miss.join(", ")+"."):""}`, cls:"good"};
+    return {ok:false, text:`There is none of that here to take.`, cls:"warn"};
+  }
   const n=node();
   const it=matchItem((n.items||[]), t);
   if(!it) return {ok:false, text:`There is no ${t} here to take.`, cls:"warn"};
@@ -705,36 +599,30 @@ function ageWreck(d){
 
 function doUse(t, item){
   const tgt=String(t||"").toLowerCase();
-  // eat/drink handled by doEat; here handle tool use
-  if(tgt.includes("rifle") && hasItem("rifle")){
+  const it=String(item||t||"").toLowerCase();
+  if((tgt.includes("rifle")||it.includes("rifle")||it.includes("musket")) && hasItem("rifle")){
     return {ok:true, text:"You level the musket. The report sends the wildlife bolting — and warns the sharks you are here. (useful to hunt or scare, but loud)", cls:"warn", lore:"The musket's report scares predators but draws the sea's attention."};
   }
-  if(tgt.includes("radio") && hasItem("radio")){
+  if((tgt.includes("radio")||it.includes("radio")||it.includes("wireless")) && hasItem("radio")){
     return {ok:true, text:"You key the wireless. Static, then a voice through the storm: \"...any survivor, this is the trading schooner *Avis*... we hold offshore at the reef...\" — if you raise a signal, they will come.", cls:"fog", lore:"The wireless reaches the schooner Avis, holding offshore; a signal will bring rescue."};
   }
-  return {ok:false, text:"You can't use that here. (try: salvage, build, signal, tame, eat)", cls:"warn"};
-}
-
-function doRead(t){
-  // no journals in this world; reading the landscape is doExamine. Keep for LLM parity.
-  return {ok:false, text:"There is no writing here to read — only the island, and what it chooses to show you.", cls:"warn"};
+  // emergent: let the LLM propose a validated outcome
+  return {ok:true, text:"You act.", cls:"fog", pendingGen:{type:"emerge", query: (item?item+" ":"")+(t||"") || "that action"}};
 }
 
 function doAsk(t, say){
-  const tgt=String(t||"").toLowerCase();
-  if(say && /cat|parrot|companion|animal|tame/.test(say)){
+  const q = String(say||t||"").toLowerCase();
+  // ponytail: only exact tutorial phrasing gets canned text; everything else → genLore
+  if(/^(how (do i|can i) (tame|befriend)|how to tame)\b/.test(q) || q==="tame?" || q==="companions?"){
     return {ok:true, text:`The cat, if tamed, hunts and scouts. The parrot, if tamed, warns of ships and predators. Feed them (goat meat / fig) where they live to win them.`, cls:"fog"};
   }
-  if(say && /signal|fire|rescue|ship|escape/.test(say)){
+  if(/^(how (do i|can i) (signal|escape|get rescued)|what is signal)\b/.test(q)){
     return {ok:true, text:`A signal fire on the cliff draws rescue — and predators. Bright signal, more of both. Build a pyre there, or tune the radio if you salvaged it.`, cls:"fog"};
   }
-  if(say && /wreck|meridian|salvage/.test(say)){
+  if(/^(what (can i|do i) salvage|how (do i|can i) salvage)\b/.test(q)){
     return {ok:true, text:`The Meridian is breaking up on the reef. Her cargo — tools, sailcloth, provisions, a musket, a wireless — is yours if you take it before the sea does.`, cls:"fog"};
   }
-  if(say && (say.match(/\?$/)||/what|who|why|how|where|describe|ecology|animal|plant|bird|creature|history/.test(say))){
-    return {ok:true, text:`You put the question to the island.`, cls:"fog", pendingGen:{type:"lore", query:say}};
-  }
-  return {ok:true, text:`You speak to the wind. Something in the palms listens, and remembers your voice.`, cls:"fog"};
+  return {ok:true, text:`You put the question to the island.`, cls:"fog", pendingGen:{type:"lore", query:say||t||"?"}};
 }
 
 function doBuild(t){
@@ -868,208 +756,172 @@ function endGame(kind){
    then validate against the deterministic engine. Offline
    regex fallback when no key / call fails (the spine always works).
    ============================================================ */
-const ACTION_VERB = {
-  go:["go","walk","move","head","climb","enter","run","travel","south","north","east","west","up","down","in","out","leave"],
-  take:["take","grab","pick","collect","get","pocket"],
-  examine:["examine","inspect","look at","study","search","observe"],
-  salvage:["salvage","strip","loot","recover","pull from the wreck"],
-  use:["use","operate","turn","fire","key","tune"],
-  ask:["ask","tell","question","say","speak"],
-  build:["build","construct","make","craft","lash","raise","sew"],
-  signal:["signal","light the pyre","burn","smoke","signal fire"],
-  tame:["tame","befriend","win over","feed the","domesticate"],
-  launch:["launch","flee","sail","escape","set off","cast off","leave the island"],
-  eat:["eat","drink","consume","taste"],
-  look:["look","describe","where","what can i see","survey","scan"],
-  wait:["wait","rest","hold","pause","stay","sleep"]
-};
-
+// ponytail: ACTION_VERB map deleted — offlineParse regex is the offline spine
 function offlineParse(text){
   const t = text.toLowerCase().trim();
-  
-  // 1. Questions → ask (preserve full question as say, topic from first keyword)
+  const one = (action, target, item, say)=> ({action, target:target||null, item:item||null, say:say||text});
+
+  // compound: "go down, then swim to the wreck"
+  if(/\bthen\b/.test(t)){
+    const parts = t.split(/\s+then\s+/).map(x=>x.trim()).filter(Boolean);
+    if(parts.length>1) return {actions: parts.map(p=>offlineParse(p))};
+  }
+
+  // questions
   if(t.endsWith("?") || /^(what|where|how|why|who|is there|can i|do i|did i|should i|would i|could i)\b/.test(t)){
-    // "what can i see", "what is here", "describe" → look action instead of ask
-    if(/\b(what can i see|what is here|what's here|describe|look around)\b/.test(t)){
-      return {action:"look", target:null, item:null, say:text};
-    }
-    // Extract meaningful topic from question: "what can i see on the beach?" → "beach"
+    if(/\b(look around|describe|where am i|survey|scan)\b/.test(t)) return one("look");
+    if(/\bwhat can i see\b/.test(t) && !/\bon\b/.test(t)) return one("look");
     const topicMatch = t.match(/^(what|where|how|why|who|is there|can i|do i|did i|should i|would i|could i)\b\s*(.+)/i);
     let topic = topicMatch ? topicMatch[2].replace(/\?$/,"").trim() : t.replace(/\?$/,"").trim();
-    // Refine topic: extract key noun/location
     const locationMatch = topic.match(/\b(on|at|in|near|around|about)\s+(\w+(?:\s+\w+)?)\b/i);
     if(locationMatch) topic = locationMatch[2];
-    return {action:"ask", target:topic||"general", item:null, say:text};
+    return one("ask", topic||"general", null, text);
   }
-  
-  // 2. Salvage everything / all → ask for clarification
-  if(/\bsalvage\s+(everything|all|it all)\b/.test(t)){
-    return {action:"ask", target:null, item:null, say:"What do you want to salvage from the wreck? Categories: tools, sailcloth, provisions, rifle, radio."};
-  }
-  
-  // 3. Explicit movement
-  const moveMatch = t.match(/^(go|walk|head|run|move)\s+(north|south|east|west|up|down|in|out|northwest|northeast|southwest|southeast)\b/);
-  if(moveMatch) return {action:"go", target:moveMatch[2], item:null, say:text};
-  
-  // Direction-only shorthand
+
+  if(/\bsalvage\s+(everything|all|it all)\b/.test(t))
+    return one("ask", null, null, "What do you want to salvage from the wreck? Categories: tools, sailcloth, provisions, rifle, radio.");
+
+  const give = t.match(/\b(?:give|offer|feed)\s+(.+?)\s+to\s+(?:the\s+)?(.+)$/);
+  if(give && /cat|parrot|jaguar/.test(give[2])) return one("tame", give[2]);
+
+  const throwAt = t.match(/\b(?:throw|toss|hurl|use)\s+(.+?)\s+(?:at|on|toward|towards)\s+(.+)$/);
+  if(throwAt) return one("use", throwAt[2], throwAt[1]);
+
+  const goTo = t.match(/^(?:go|walk|head|run|move)(?:\s+to)?\s+(.+)$/);
+  if(goTo) return one("go", goTo[1].replace(/^(the|a|an)\s+/,"").trim());
+
+  const swim = t.match(/\b(?:swim|wade|cross)\s+(?:to|out to|toward|towards)\s+(?:the\s+)?(.+)$/);
+  if(swim) return one("go", swim[1].trim());
+
   for(const d of ["north","south","east","west","up","down","in","out","northwest","northeast","southwest","southeast"]){
-    if(new RegExp("\\b"+d+"\\b").test(t)) return {action:"go", target:d, item:null, say:text};
+    if(new RegExp("^"+d+"$").test(t)) return one("go", d);
   }
-  
-  // 4. Swim/wade/cross → ask for direction
-  if(/\b(swim|wade|cross)\s+to\b/.test(t)){
-    const dest = t.match(/\b(swim|wade|cross)\s+to\s+(.+)$/);
-    return {action:"ask", target:dest?dest[2]:"unknown", item:null, say:text};
-  }
-  
-  // 5. Look/describe
-  if(/\b(look around|describe|where am i|what can i see|survey|scan|look$)\b/.test(t)){
-    return {action:"look", target:null, item:null, say:text};
-  }
-  
-  // 6. Examine
+
+  if(/\b(look around|describe|where am i|what can i see|survey|scan|look$)\b/.test(t))
+    return one("look");
+
   const examineMatch = t.match(/\b(examine|look at|inspect|read|check)\s+(.+)$/);
-  if(examineMatch) return {action:"examine", target:examineMatch[2].trim(), item:null, say:text};
-  
-  // 7. Take
-  const takeMatch = t.match(/\b(take|pick up|get|grab)\s+(.+)$/);
-  if(takeMatch) return {action:"take", target:takeMatch[2].trim(), item:null, say:text};
-  
-  // 8. Salvage category (match actual engine categories)
+  if(examineMatch) return one("examine", examineMatch[2].trim());
+
+  const takeMatch = t.match(/\b(take|pick up|pick|collect|get|grab)\s+(.+)$/);
+  if(takeMatch){
+    let target = takeMatch[2].trim().replace(/^(the|a|an|some)\s+/,"");
+    if(/\beverything\b|\ball\b/.test(target)){
+      const here=(node().items||[]).filter(i=>!hasItem(i));
+      if(here.length) return {actions: here.map(i=>one("take", itemName(i)))};
+      return one("look");
+    }
+    return one("take", target);
+  }
+
   const salvageMatch = t.match(/\bsalvage\s+(tools|sailcloth|provisions|rifle|radio)\b/);
-  if(salvageMatch) return {action:"salvage", target:salvageMatch[1], item:null, say:text};
-  
-  // 9. Use
+  if(salvageMatch) return one("salvage", salvageMatch[1]);
+
   const useMatch = t.match(/\buse\s+(.+?)(?:\s+on\s+(.+))?$/);
-  if(useMatch) return {action:"use", target:useMatch[2]||null, item:useMatch[1].trim(), say:text};
-  
-  // 10. Build/craft
+  if(useMatch) return one("use", useMatch[2]||null, useMatch[1].trim());
+
   const buildMatch = t.match(/\b(build|craft)\s+(.+)$/);
-  if(buildMatch) return {action:"build", target:buildMatch[2].trim(), item:null, say:text};
-  
-  // 11. Signal
-  if(/\b(signal|light signal|make signal|build signal)\b/.test(t)){
-    return {action:"signal", target:null, item:null, say:text};
-  }
-  
-  // 12. Tame
+  if(buildMatch) return one("build", buildMatch[2].trim());
+
+  if(/\b(signal|light signal|make signal|build signal)\b/.test(t)) return one("signal");
+
   const tameMatch = t.match(/\b(tame|befriend)\s+(.+)$/);
-  if(tameMatch) return {action:"tame", target:tameMatch[2].trim(), item:null, say:text};
-  
-  // 13. Launch
+  if(tameMatch) return one("tame", tameMatch[2].trim());
+
   const launchMatch = t.match(/\blaunch\s+(?:the\s+)?(.+)$/);
-  if(launchMatch) return {action:"launch", target:launchMatch[1].trim(), item:null, say:text};
-  
-  // 14. Eat
+  if(launchMatch) return one("launch", launchMatch[1].trim());
+
   const eatMatch = t.match(/\b(eat|drink|consume)\s+(.+)$/);
-  if(eatMatch) return {action:"eat", target:eatMatch[2].trim(), item:null, say:text};
-  
-  // 15. Wait
-  if(/\b(wait|rest|sleep|pass time|hold)\b/.test(t)){
-    return {action:"wait", target:null, item:null, say:text};
-  }
-  
-  return {action:"look", target:null, item:null, say:text};
+  if(eatMatch) return one("eat", eatMatch[2].trim());
+
+  if(/\b(wait|rest|sleep|pass time|hold)\b/.test(t)) return one("wait");
+
+  return one("ask", "intent", null, text);
 }
 
-// Proxy player LLM calls through the server so the OpenRouter key stays server-side.
-// Returns { content, status } where status is one of:
-//   "ok"         — got content
-//   "empty"      — server reachable but returned no usable content (model failed)
-//   "unreachable"— no server / network error (player is on file://, or server down)
+function toast(msg, kind){
+  const host = document.getElementById("toasts");
+  if(!host) return;
+  const el = document.createElement("div");
+  el.className = "toast "+(kind||"info");
+  el.textContent = msg;
+  host.appendChild(el);
+  setTimeout(()=>el.remove(), 4200);
+}
+
+// Proxy player LLM calls through the server. Retries 429 once.
+// status: ok | empty | rate_limit | server_error | unreachable
 async function callLLMProxy(system, user, maxTokens){
-  let r;
-  try{
-    r = await fetch(API_BASE+"/llm",{
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ system, user, maxTokens:maxTokens||200 })
-    });
-  }catch(e){ return { content:null, status:"unreachable" }; }
-  if(!r.ok) return { content:null, status:"unreachable" };
-  const d = await r.json().catch(()=>({}));
-  const c = (d && d.content) || null;
-  return { content:c, status: c ? "ok" : "empty" };
+  async function once(){
+    let r;
+    try{
+      r = await fetch(API_BASE+"/llm",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ system, user, maxTokens:maxTokens||200 })
+      });
+    }catch(e){ return { content:null, status:"unreachable", code:0 }; }
+    if(r.status===429) return { content:null, status:"rate_limit", code:429 };
+    if(r.status>=500) return { content:null, status:"server_error", code:r.status };
+    if(!r.ok) return { content:null, status:"server_error", code:r.status };
+    const d = await r.json().catch(()=>({}));
+    const c = (d && d.content) || null;
+    return { content:c, status: c ? "ok" : "empty", code:r.status };
+  }
+  let out = await once();
+  if(out.status==="rate_limit"){
+    await new Promise(r=>setTimeout(r, 1200));
+    out = await once();
+  }
+  return out;
 }
 
-// Thin wrapper returning just the text (for generation), null on any failure.
 async function llmText(system, user, maxTokens){
   const { content } = await callLLMProxy(system, user, maxTokens);
   return content || null;
 }
 
-// Strip chain-of-thought / meta-reasoning that free models often leak into
-// "just the sentence" responses. Returns the first self-contained factual sentence.
 function cleanGeneration(raw){
   if(!raw) return "";
   let s = raw.replace(/```[a-z]*|```/gi,"").replace(/\s*\n\s*/g," ").trim();
-  // cut to the part after a clear answer marker, if present
   const marker = s.match(/\b(however,?|so,?|in short,?|in brief,?|answer:?|the answer is:?|in conclusion,?)\s+(.+)$/i);
   if(marker && marker[2].length > 10) s = marker[2];
-  // split into sentences and drop meta/reasoning preamble sentences
-  const meta = /^(the user|the player|i (need|should|must|will|think|am|would)|you (are|need|should|must|can|will)|given (the|these|this)|this (seems|is|appears)|here('?s| is)|let me|based on|to answer|it seems|my (task|goal|response))/i;
+  const meta = /^(the user|the player|i (need|should|must|will|think|am|would)|you (are|need|should|must|can|will)|given (the|these|this)|this (seems|is|appears)|here('?s| is)|let me|based on|to answer|it seems|my (task|goal|response)|but need|should mention|need to keep|consistent with|no magic)/i;
+  const leak = /need to keep|concise|factual|consistent with constraints|should mention|no magic|no cold/i;
   const sentences = s.split(/(?<=[.!?])\s+/).map(x=>x.trim()).filter(Boolean);
-  const kept = sentences.filter(x=>!meta.test(x));
-  let out = (kept.length ? kept : sentences).join(" ");
-  // final hedge trim
+  const kept = sentences.filter(x=>!meta.test(x) && !leak.test(x));
+  let out = (kept.length ? kept : sentences.filter(x=>!leak.test(x))).join(" ");
   out = out.replace(/^(answer:?|response:?|sure,?|certainly,?|ok,?|well,?)\s*/i,"").trim();
-  // cap to avoid a runaway paragraph sneaking through
+  if(leak.test(out)) return "";
   if(out.length > 400) out = out.slice(0,397).replace(/\s+\S*$/,"") + "…";
   return out;
 }
 
 async function callLLM(text){
-  // bounded retrieval: only the most relevant lore nodes for THIS context
   const ctx = text + " " + node().name + " " + (S.inv.map(itemName).join(" "));
   const relevant = LORE.retrieve(ctx, 6).map(n=>"- "+n.text).join("\n");
-  const sys = `You are the interpreter for a text adventure called York: The Wreck of the Meridian, a castaway survival game.
-Convert the player's plain-language command into a JSON action object.
-Strict schema: {"action": one of [go,take,examine,salvage,use,build,signal,tame,launch,eat,ask,look,wait], "target": string|null (thing, cargo category, direction, or companion), "item": string|null (item used), "say": string|null (words spoken)}.
-Respond with ONLY the JSON object, no markdown, no commentary.
+  const recent = S.log.slice(-8).map(e=>e.t).join("\n");
+  const exits = Object.keys(node().exits||{}).map(k=>k+"→"+WORLD.nodes[node().exits[k]].name).join(", ");
+  const here = (node().items||[]).filter(i=>!hasItem(i)).map(itemName).join(", ")||"none listed";
+  const sys = `You convert player commands into JSON for a castaway text adventure.
+Return ONLY JSON (no markdown). Prefer a single action object.
+For compound commands use: {"actions":[...action objects...]}.
+Schema per action: {"action":"go|take|examine|salvage|use|build|signal|tame|launch|eat|ask|look|wait","target":string|null,"item":string|null,"say":string|null}.
 
-RULES PRECEDENCE — you MUST obey these; never contradict them, never let player intent override them:
-${SPEC.constraints.join(" ")}
-Relevant world lore (retrieved, not exhaustive):
-${relevant}.
-Current place: ${node().name}. Inventory: ${S.inv.map(itemName).join(", ")||"empty"}.
+Rules: ${SPEC.constraints.join(" ")}
+Place: ${node().name}. Exits: ${exits||"none"}. Visible: ${here}. Inventory: ${S.inv.map(itemName).join(", ")||"empty"}.
+Lore:\n${relevant||"(none)"}
+Recent:\n${recent}
 
-CRITICAL INTERPRETATION RULES (follow in order; first match wins):
-1. QUESTIONS: Input ends with "?" OR starts with "what/where/how/why/who/is there/can i/do i/did i/should i/would i/could i" → action:"ask", target:the topic, say:the full question. Do NOT map to look/examine/go.
-   Examples: "where can i go?" → {"action":"ask","target":"directions","say":"where can i go?"}
-             "can i swim to the wreck?" → {"action":"ask","target":"swimming","say":"can i swim to the wreck?"}
-             "what fish are here?" → {"action":"ask","target":"fish","say":"what fish are here?"}
-
-2. SALVAGE CLARIFICATION: "salvage everything" / "salvage all" / "salvage it all" → action:"ask", say:"What do you want to salvage from the wreck? Categories: provisions, tools, materials, arms, personal."
-
-3. EXPLICIT MOVEMENT VERBS: "go north", "walk south", "head east", "north", "south", "east", "west", "up", "down", "northwest", etc. → action:"go", target:direction.
-
-4. SWIM/WADE/CROSS are NOT directions. If the player says "swim to [place]" or "wade to [place]", map to the correct direction FROM the current place that leads toward that place, OR action:"ask", target:the place, say:"How do I get to the [place]?". Do NOT use "wreck"/"island"/etc. as directions.
-
-5. LOOK/DESCRIBE: "look around", "describe", "where am i", "what can i see", "survey", "scan" → action:"look".
-
-6. EXAMINE: "examine [thing]", "look at [thing]", "inspect [thing]", "read [thing]", "check [thing]" → action:"examine", target:thing.
-
-7. TAKE: "take [thing]", "pick up [thing]", "get [thing]", "grab [thing]" → action:"take", target:thing.
-
-8. SALVAGE CATEGORY: "salvage tools", "salvage sailcloth", "salvage provisions", "salvage rifle", "salvage radio" → action:"salvage", target:category.
-
-9. USE: "use [thing] on [target]", "use [thing]" → action:"use", item:thing, target:target|null.
-
-10. BUILD/CRAFT: "build [thing]", "craft [thing]" → action:"build", target:thing.
-
-11. SIGNAL: "signal", "light signal", "make signal", "build signal" → action:"signal".
-
-12. TAME: "tame [companion]", "befriend [companion]" → action:"tame", target:companion.
-
-13. LAUNCH: "launch [craft]", "launch the [craft]" → action:"launch", target:craft.
-
-14. EAT: "eat [food]", "drink [food]", "consume [food]" → action:"eat", target:food.
-
-15. WAIT: "wait", "rest", "sleep", "pass time", "hold" → action:"wait".
-
-16. AMBIGUOUS/UNKNOWN: action:"look".`;
-  const { content, status } = await callLLMProxy(sys, text, 200);
-  return { parsed: extractJSON(content || ""), status };
+Priority:
+1. Questions → ask (say=full question). Exception: bare "look around"/"what can i see" → look.
+2. "go to [place]" / "swim to [place]" → go with target=place name (not invent directions).
+3. "pick/collect/take X and Y" → actions array of takes.
+4. "give X to cat/parrot" → tame.
+5. "throw/use X at Y" → use with item=X target=Y.
+6. Unknown → ask with say=original text (never invent go).`;
+  const { content, status, code } = await callLLMProxy(sys, text, 250);
+  return { parsed: extractJSON(content || ""), status, code };
 }
 
 function extractJSON(raw){
@@ -1087,16 +939,46 @@ function extractJSON(raw){
    PROPOSE, but only the engine may ESTABLISH.
    ============================================================ */
 
-// Generate a single consistent world fact (ecology/lore) answering `text`.
+// Structured lore answer. Returns {answer, facts, entities} or null.
 async function genLore(text){
   const ctx = text + " " + node().name;
-  const relevant = LORE.retrieve(ctx, 5).map(n=>"- "+n.text).join("\n");
-  const sys = `You are the world-builder for York: The Wreck of the Meridian, a castaway on an equatorial island (reef, palms, mangroves, feral goats, seabirds, jungle cats, parrots, sharks). `+
-    `Answer the player's question with ONE concise factual sentence about the world, consistent with these hard constraints and existing lore. `+
-    `Do NOT invent cold/volcanic life, magic, or anything contradicting the rules. Reply with ONLY the sentence, no preamble.\n`+
-    `CONSTRAINTS: ${SPEC.constraints.join(" ")}\nEXISTING LORE:\n${relevant}`;
-  const c = await llmText(sys, text, 120);
-  return cleanGeneration(c);
+  const relevant = LORE.retrieve(ctx, 6).map(n=>"- "+n.text).join("\n");
+  const recent = S.log.filter(e=>e.c==="you"||e.c==="llm").slice(-6).map(e=>e.t).join("\n");
+  const sys = `World-builder for an equatorial castaway island (reef, palms, mangroves, goats, seabirds, jungle cats, parrots, sharks).
+Reply ONLY with JSON (no markdown, no reasoning):
+{"answer":"one vivid factual sentence answering the player","facts":["optional short lore facts"],"entities":[{"id":"snake_case","name":"display name","portable":true|false,"desc":"one short line"}]}
+Rules: no cold/volcanic life, no magic. Entities only if visible/usable at the current place. portable=true only for things the player could pick up.
+CONSTRAINTS: ${SPEC.constraints.join(" ")}
+PLACE: ${node().name}
+LORE:\n${relevant||"(none)"}
+RECENT:\n${recent||"(none)"}`;
+  const c = await llmText(sys, text, 220);
+  if(!c) return null;
+  const j = extractJSON(c);
+  if(j && j.answer){
+    j.answer = cleanGeneration(j.answer) || j.answer;
+    if(/need to keep|consistent with constraints|should mention/i.test(j.answer)) j.answer = "";
+    return j;
+  }
+  const cleaned = cleanGeneration(c);
+  return cleaned ? {answer:cleaned, facts:[], entities:[]} : null;
+}
+
+async function genEmergent(query){
+  const sys = `Narrate one short outcome for a castaway on an equatorial island.
+Return ONLY JSON: {"text":"1-2 sentences","lifeDelta":0,"consumeItem":null|"item_id","lore":null|"short fact"}
+Allowed lifeDelta: -15..+5. consumeItem only if item is in inventory. No magic. No inventing new inventory except consume.
+Place: ${node().name}. Inventory: ${S.inv.map(itemName).join(", ")||"empty"}.`;
+  const c = await llmText(sys, "Player attempts: "+query, 160);
+  const j = extractJSON(c||"");
+  if(!j || !j.text) return {ok:false, text:"Nothing comes of it.", cls:"warn"};
+  const text = cleanGeneration(j.text) || j.text;
+  if(typeof j.lifeDelta==="number" && j.lifeDelta>=-15 && j.lifeDelta<=5) lifeDelta(j.lifeDelta);
+  if(j.consumeItem && hasItem(j.consumeItem)){
+    const i=S.inv.indexOf(j.consumeItem); if(i>=0) S.inv.splice(i,1);
+  }
+  tick(); ageWreck(1);
+  return {ok:true, text, cls:"fog", lore: j.lore||null};
 }
 
 // The engine's validator: a proposed new place must respect the rules before it is added.
@@ -1141,6 +1023,64 @@ async function genPlace(query){
   }catch(e){ return { ok:false, why:"error" }; }
 }
 
+function flattenActions(parsed){
+  if(!parsed) return [];
+  if(Array.isArray(parsed.actions)){
+    const out=[];
+    for(const a of parsed.actions){
+      if(a && a.actions) out.push(...flattenActions(a));
+      else if(a) out.push(a);
+    }
+    return out;
+  }
+  return [parsed];
+}
+
+function normalizeParsed(a, fallbackSay){
+  return {
+    action: String(a.action||"look").toLowerCase(),
+    target: a.target||null,
+    item: a.item||null,
+    say: a.say||fallbackSay||null
+  };
+}
+
+async function runPendingGen(pending){
+  if(!pending || S.ended) return;
+  if(pending.type==="lore"){
+    setThinking(true, "the voice weaves the world…");
+    const out = await genLore(pending.query);
+    setThinking(false);
+    if(out && out.answer){
+      pushLog(out.answer, "llm");
+      commitLore("gen:"+(LORE.seq+1), out.answer, {tags:["generated","lore"], text:out.answer});
+      for(const f of (out.facts||[])){
+        if(!f || validateFactClient(f)) continue;
+        commitLore("gen:"+(LORE.seq+1), f, {tags:["generated","lore"], text:f});
+      }
+      applyEntities(out.entities);
+    } else {
+      pushLog("The gray offers no answer you can trust.","sys");
+      toast("Lore generation failed or empty.","warn");
+    }
+  } else if(pending.type==="emerge"){
+    setThinking(true, "the voice weighs the act…");
+    const out = await genEmergent(pending.query);
+    setThinking(false);
+    pushLog(out.text, out.cls||"fog");
+    if(out.lore) commitLore("emerge:"+(S.log.length), out.lore);
+  } else if(pending.type==="place"){
+    setThinking(true, "the voice charts new ground…");
+    const gp = await genPlace(pending.query);
+    setThinking(false);
+    if(gp.ok){
+      pushLog(`You uncover ${gp.prop.name}. ${gp.prop.desc||""} (go: ${gp.exitKey})`, "llm");
+    } else {
+      pushLog("You find nothing new — or the rules forbid it: "+gp.why+".", "warn");
+    }
+  }
+}
+
 /* ---- the public turn: NL -> parse -> validate -> apply -> narrate ---- */
 let llmUnreachableWarned = false;
 async function playerTurn(text){
@@ -1151,68 +1091,38 @@ async function playerTurn(text){
   setThinking(false);
   let parsed = llmResult.parsed;
   const status = llmResult.status;
-  let usedLLM = !!parsed;
-  
-  // Questions are parsed offline for reliability - the LLM often misinterprets topics
-  const isQuestion = text.trim().endsWith("?") || /^(what|where|how|why|who|is there|can i|do i|did i|should i|would i|could i)\b/i.test(text.trim());
-  if(isQuestion){
-    parsed = offlineParse(text);
-    usedLLM = false;
-  } else if(!parsed) {
-    parsed = offlineParse(text);
-  }
-  // normalize
-  parsed.action = (parsed.action||"look").toLowerCase();
-  parsed.target = parsed.target||null;
-  parsed.item = parsed.item||null;
-  parsed.say = parsed.say||text;
+  let usedLLM = !!(parsed && (parsed.action || parsed.actions));
 
-  // Surface WHY the LLM didn't drive this turn, so offline mode is never silent.
+  // Questions: offline ask is more reliable for topic routing
+  const isQuestion = text.trim().endsWith("?") || /^(what|where|how|why|who|is there|can i|do i|did i|should i|would i|could i)\b/i.test(text.trim());
+  if(isQuestion){ parsed = offlineParse(text); usedLLM = false; }
+  else if(!usedLLM){ parsed = offlineParse(text); }
+
   if(status==="unreachable"){
     if(!llmUnreachableWarned){
       llmUnreachableWarned = true;
-      pushLog("The voice cannot reach you — no server is listening (running from a file, or the API is down). The island answers in its own terse way.","warn");
+      toast("Cannot reach /api/llm — offline parse in use.","err");
+      pushLog("The voice cannot reach you. The island answers in its own terse way.","warn");
     }
-  } else if(status==="empty"){
-    pushLog("The voice falters and says nothing — falling back to the island's plain tongue.","warn");
+  } else if(status==="rate_limit"){
+    toast("Voice rate-limited (429). Offline parse used.","warn");
+  } else if(status==="server_error"){
+    toast("Voice server error ("+(llmResult.code||"?")+"). Offline parse used.","err");
+  } else if(status==="empty" && !usedLLM){
+    toast("Voice returned empty — using offline parse.","warn");
   }
 
-  const res = applyAction(parsed);
-  if(usedLLM) pushLog("(the voice interprets → "+parsed.action+(parsed.target?(" "+parsed.target):"")+")","llm");
-  pushLog(res.text, res.cls||"sys");
+  let steps = flattenActions(parsed).map(a=>normalizeParsed(a, text));
+  if(!steps.length) steps = [normalizeParsed({action:"look"}, text)];
 
-  // async actions (e.g. contribute) run after the immediate result is logged
-  if(res.async && res.run){ await res.run(); if(!S.ended) render(); return; }
-
-  if(res.lore) commitLore("turn:"+(S.log.length), res.lore);
-
-  // procedural layer: the engine asked the LLM to generate world content
-  if(res.pendingGen && !S.ended){
-    if(res.pendingGen.type==="lore"){
-      setThinking(true, "the voice weaves the world…");
-      const fact = await genLore(res.pendingGen.query);
-      setThinking(false);
-      if(fact){
-        pushLog(fact, "llm");
-        // Store the fact in lore
-        const loreId = "gen:"+(LORE.seq+1);
-        commitLore(loreId, fact, {tags:["generated","lore"], text:fact});
-        // If the fact mentions visible items at current location, make them interactable
-        maybeAddLoreItemsToLocation(fact);
-      } else {
-        pushLog("The gray offers no answer you can trust. (Set an OpenRouter key for the LLM to weave the world.)","sys");
-      }
-    } else if(res.pendingGen.type==="place"){
-      setThinking(true, "the voice charts new ground…");
-      const gp = await genPlace(res.pendingGen.query);
-      setThinking(false);
-      if(gp.ok){
-        pushLog(`You uncover ${gp.prop.name}. ${gp.prop.desc||""} (go: ${gp.exitKey})`, "llm");
-        render();
-      } else {
-        pushLog("You find nothing new — or the rules forbid it: "+gp.why+".", "warn");
-      }
-    }
+  for(let i=0; i<steps.length && !S.ended; i++){
+    const step = steps[i];
+    const res = applyAction(step);
+    if(usedLLM) pushLog("(the voice interprets → "+step.action+(step.target?(" "+step.target):"")+")","llm");
+    pushLog(res.text, res.cls||"sys");
+    if(res.async && res.run){ await res.run(); }
+    if(res.lore) commitLore("turn:"+(S.log.length), res.lore);
+    if(res.pendingGen) await runPendingGen(res.pendingGen);
   }
 
   if(!S.ended) render();
@@ -1322,9 +1232,9 @@ function copyChat(){
   // Newest first — matches on-screen order
   const lines = S.log.slice().reverse().map(e=>e.t).join("\n");
   navigator.clipboard.writeText(lines).then(()=>{
-    pushLog("Chat log copied to clipboard.","sys");
+    toast("Chat copied.","ok");
   }).catch(()=>{
-    pushLog("Failed to copy chat log.","bad");
+    toast("Copy failed.","err");
   });
 }
 

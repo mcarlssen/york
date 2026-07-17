@@ -1,0 +1,48 @@
+/* Layout — structure, sizing, flex/grid, overflow */
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+#app{width:100%;min-width:1040px;margin:0;padding:14px 150px;height:100%;display:flex;flex-direction:column;overflow:hidden;box-sizing:border-box}
+header{border-bottom:1px solid var(--line);padding-bottom:8px;margin-bottom:12px;flex-shrink:0}
+.grid{display:grid;grid-template-columns:1.55fr .85fr;gap:14px;align-items:stretch;flex:1;min-height:0}
+@media(max-width:780px){
+  #app{min-width:0;padding:14px 16px}
+  .grid{grid-template-columns:1fr;overflow:auto}
+}
+.panel{padding:12px}
+.panel.main{display:flex;flex-direction:column;min-height:0;height:100%;overflow:hidden}
+.side-col{display:flex;flex-direction:column;gap:14px;min-height:0;height:100%;overflow:hidden}
+.panel.side{display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.panel.side.inv{flex-shrink:0}
+.panel.side.journal{flex:1;min-height:0}
+.panel h2{margin:0 0 8px;flex-shrink:0}
+#status{padding:10px 12px;margin-bottom:12px;flex-shrink:0}
+#meters{display:flex;flex-wrap:wrap;gap:8px 16px;margin:0}
+.meter{flex:1 1 140px;display:flex;align-items:center;gap:8px;min-width:0}
+.meter-label{flex:0 0 auto;width:3.6em}
+.meter-track{flex:1 1 auto;min-width:48px;height:10px;overflow:hidden}
+.meter-fill{height:100%;transition:width .2s ease}
+.meter-val{flex:0 0 auto;min-width:2.2em;text-align:right}
+.mapbox{padding:20px 12px;margin-bottom:10px;flex-shrink:0}
+.invbox{padding:10px 12px;flex-shrink:0}
+pre#scene{white-space:pre-wrap;margin:0;min-height:40px}
+#log{flex:1;overflow-y:auto;overflow-x:hidden;padding-right:4px;min-height:0}
+#log .e{margin:0 0 5px;padding-left:7px}
+.jsub{margin:-4px 0 8px;flex-shrink:0}
+#journal{flex:1;overflow-y:auto;overflow-x:hidden;padding-right:4px;min-height:0}
+.jnode{padding:6px 9px;margin-bottom:6px}
+.jnode .jdetail{display:none;margin-top:6px;white-space:pre-wrap}
+.jnode.open .jdetail{display:block}
+.jnode .jlinks{margin-top:5px}
+#input{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;flex-shrink:0}
+#input input{flex:1;min-width:200px;padding:10px 11px;margin-bottom:10px}
+#input button{padding:8px 12px;margin-bottom:10px}
+#copyChat{padding:8px;display:inline-flex;align-items:center;justify-content:center;line-height:0}
+#copyChat svg{width:18px;height:18px;display:block}
+.thinking{margin:8px 0 2px;flex-shrink:0}
+.thinking .dot{display:inline-block}
+.keys{margin-top:8px;flex-shrink:0}
+.modal{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:50}
+.modal .box{max-width:560px;padding:20px}
+.modal button{margin-top:14px;padding:8px 16px}
+#toasts{position:fixed;bottom:20px;right:20px;z-index:200;display:flex;flex-direction:column;gap:8px;max-width:360px;pointer-events:none}
+.toast{padding:10px 14px;border-radius:6px;font-size:12px;font-weight:600;pointer-events:auto;box-shadow:0 4px 16px rgba(0,0,0,.4)}
