@@ -63,7 +63,11 @@
 </div>
 <div id="toasts"></div>
 
-<script>
+<script type="module">
+import {
+  salvageLoreJSON, isJsonDump, captureWorldDelta, applyWorldDelta, placeCatalogMentions, extractJSON as extractJSONLib
+} from "./scripts/lib/world-memory.mjs";
+
 "use strict";
 
 /* ============================================================
@@ -112,7 +116,7 @@ const WORLD_DOC = {
   map: {
     start:"beach", max_clock:16,
     nodes: {
-      beach:      { name:"Shingle Beach", desc:"Where the sea spat you out. The Meridian lies broken on the reef, a hundred yards out. The jungle waits inland; the cove and your camp sit along the shore.", exits:{ west:"tide_pools", north:"jungle", east:"wreck_shore", up:"cliff", south:"cove", south_east:"camp" } },
+      beach:      { name:"Shingle Beach", desc:"Where the sea spat you out. The Meridian lies broken on the reef, a hundred yards out. The jungle waits inland; the cove and your camp sit along the shore.", exits:{ west:"tide_pools", north:"jungle", east:"wreck_shore", up:"cliff", south:"cove", south_east:"camp" }, items:["driftwood","debris"] },
       wreck_shore:{ name:"Wreck Shore", desc:"At low light you can wade toward the Meridian's hull. She is breaking up fast.", exits:{ west:"beach" }, salvage:true },
       tide_pools: { name:"Tide Pools", desc:"Rock pools thick with crabs and shellfish; a seep of fresh water filters down.", exits:{ east:"beach" }, items:["crab","fresh_water"], forage:"food" },
       jungle:     { name:"Jungle Interior", desc:"Close, green, loud with birds. Feral goats browse; something with yellow eyes watches from the figs.", exits:{ south:"beach", east:"spring", north:"cliff" }, items:["goat_meat","fig","bamboo"], cat_home:true },
@@ -146,20 +150,29 @@ const WORLD_DOC = {
 
 /* Derive the engine's WORLD + SPEC from the world doc. */
 function buildWorld(doc){
+  // deep clone so play mutations never dirty the embedded WORLD_DOC
   return {
     start: doc.map.start,
     maxClock: doc.map.max_clock,
-    nodes: doc.map.nodes,
-    containers: doc.map.containers,
-    items: doc.map.items,
-    companions: doc.companions
+    nodes: JSON.parse(JSON.stringify(doc.map.nodes)),
+    containers: JSON.parse(JSON.stringify(doc.map.containers)),
+    items: JSON.parse(JSON.stringify(doc.map.items)),
+    companions: JSON.parse(JSON.stringify(doc.companions || {}))
   };
 }
 const WORLD = buildWorld(WORLD_DOC);
+const WORLD_SEED = buildWorld(WORLD_DOC); // pristine snapshot for delta persist
 const SPEC = {
   seed: (WORLD_DOC.identity.title+": "+WORLD_DOC.identity.tagline),
   constraints: WORLD_DOC.constraints
 };
+function resetWorldFromSeed(){
+  const fresh = buildWorld(WORLD_DOC);
+  WORLD.nodes = fresh.nodes;
+  WORLD.items = fresh.items;
+  WORLD.containers = fresh.containers;
+  WORLD.companions = fresh.companions;
+}
 
 /* ============================================================
    DETERMINISTIC ENGINE — the spine (derived from WORLD_DOC).
@@ -195,7 +208,15 @@ const GAME_STATE_KEY = "york_state_v1";
 const WORLD_ID = "meridian";
 
 function saveState(){
-  try{ localStorage.setItem(GAME_STATE_KEY, JSON.stringify(S)); }catch(e){}
+  try{
+    if(S){
+      S.worldDelta = captureWorldDelta(
+        { items: WORLD_SEED.items, nodes: WORLD_SEED.nodes },
+        { items: WORLD.items, nodes: WORLD.nodes }
+      );
+    }
+    localStorage.setItem(GAME_STATE_KEY, JSON.stringify(S));
+  }catch(e){}
 }
 function loadState(){
   try{ return JSON.parse(localStorage.getItem(GAME_STATE_KEY) || "null"); }catch(e){ return null; }
@@ -355,12 +376,15 @@ function newGame(freshStart = false){
     salvaged: {},
     visited: {},
     ended: false, endKind: null,
-    log: []
+    log: [],
+    worldDelta: null
   };
   // restore full game state from localStorage (persists across refresh) — unless fresh start
   if(freshStart){
     try{ localStorage.removeItem(GAME_STATE_KEY); }catch(e){}
+    resetWorldFromSeed();
   } else {
+    resetWorldFromSeed();
     const saved = loadState();
     if(saved){
       Object.assign(S, saved);
@@ -371,6 +395,7 @@ function newGame(freshStart = false){
       S.salvaged = S.salvaged || {};
       S.visited = S.visited || {};
       S.log = S.log || [];
+      if(S.worldDelta) applyWorldDelta(WORLD, S.worldDelta);
     }
   }
   // load persistent lore graph if present (extends across sessions), else seed
@@ -429,6 +454,11 @@ function applyEntities(entities){
     registerItem(id, e.name, e.desc||("You notice "+e.name+" here."), ["generated","lore"], {portable});
     if(portable && !n.items.includes(id) && !hasItem(id)) n.items.push(id);
   }
+}
+// Bridge: prose/facts that name catalog items make them takeable here.
+function bridgeLoreToItems(texts){
+  const n = node();
+  n.items = placeCatalogMentions(WORLD.items, n.items||[], S.inv, (texts||[]).filter(Boolean).join(" "));
 }
 
 /* ---- resolve a natural-language direction/target to an exit key ---- */
@@ -800,7 +830,7 @@ function offlineParse(text){
   const examineMatch = t.match(/\b(examine|look at|inspect|read|check)\s+(.+)$/);
   if(examineMatch) return one("examine", examineMatch[2].trim());
 
-  const takeMatch = t.match(/\b(take|pick up|pick|collect|get|grab)\s+(.+)$/);
+  const takeMatch = t.match(/\b(take|pick up|pick|collect|get|grab|scavenge|find|gather|fetch)\s+(.+)$/);
   if(takeMatch){
     let target = takeMatch[2].trim().replace(/^(the|a|an|some)\s+/,"");
     if(/\beverything\b|\ball\b/.test(target)){
@@ -880,16 +910,17 @@ async function llmText(system, user, maxTokens){
 
 function cleanGeneration(raw){
   if(!raw) return "";
+  if(isJsonDump(raw)) return "";
   let s = raw.replace(/```[a-z]*|```/gi,"").replace(/\s*\n\s*/g," ").trim();
   const marker = s.match(/\b(however,?|so,?|in short,?|in brief,?|answer:?|the answer is:?|in conclusion,?)\s+(.+)$/i);
   if(marker && marker[2].length > 10) s = marker[2];
-  const meta = /^(the user|the player|i (need|should|must|will|think|am|would)|you (are|need|should|must|can|will)|given (the|these|this)|this (seems|is|appears)|here('?s| is)|let me|based on|to answer|it seems|my (task|goal|response)|but need|should mention|need to keep|consistent with|no magic)/i;
-  const leak = /need to keep|concise|factual|consistent with constraints|should mention|no magic|no cold/i;
+  const meta = /^(the user|the player|i (need|should|must|will|think|am|would)|you (are|need|should|must|can|will)|given (the|these|this)|this (seems|is|appears)|here('?s| is)|let me|based on|to answer|it seems|my (task|goal|response)|but need|should mention|need to keep|consistent with|no magic|maybe the|according to the rules)/i;
+  const leak = /need to keep|concise|factual|consistent with constraints|should mention|no magic|no cold|according to the rules|entity wasn'?t|entities should/i;
   const sentences = s.split(/(?<=[.!?])\s+/).map(x=>x.trim()).filter(Boolean);
   const kept = sentences.filter(x=>!meta.test(x) && !leak.test(x));
   let out = (kept.length ? kept : sentences.filter(x=>!leak.test(x))).join(" ");
   out = out.replace(/^(answer:?|response:?|sure,?|certainly,?|ok,?|well,?)\s*/i,"").trim();
-  if(leak.test(out)) return "";
+  if(leak.test(out) || isJsonDump(out)) return "";
   if(out.length > 400) out = out.slice(0,397).replace(/\s+\S*$/,"") + "…";
   return out;
 }
@@ -913,20 +944,17 @@ Recent:\n${recent}
 Priority:
 1. Questions → ask (say=full question). Exception: bare "look around"/"what can i see" → look.
 2. "go to [place]" / "swim to [place]" → go with target=place name (not invent directions).
-3. "pick/collect/take X and Y" → actions array of takes.
-4. "give X to cat/parrot" → tame.
-5. "throw/use X at Y" → use with item=X target=Y.
-6. Unknown → ask with say=original text (never invent go).`;
+3. "pick/collect/take/scavenge/find/gather X" → take. Never map those to salvage.
+4. "salvage" ONLY for wreck cargo: tools, sailcloth, provisions, rifle, radio.
+5. "give X to cat/parrot" → tame.
+6. "throw/use X at Y" → use with item=X target=Y.
+7. Unknown → ask with say=original text (never invent go).`;
   const { content, status, code } = await callLLMProxy(sys, text, 250);
   return { parsed: extractJSON(content || ""), status, code };
 }
 
 function extractJSON(raw){
-  if(!raw) return null;
-  let s = raw.replace(/```json|```/g,"").trim();
-  const i = s.indexOf("{"), j = s.lastIndexOf("}");
-  if(i>=0&&j>i) s=s.slice(i,j+1);
-  try{ return JSON.parse(s); }catch(e){ return null; }
+  return extractJSONLib(raw);
 }
 
 /* ============================================================
@@ -941,22 +969,26 @@ async function genLore(text){
   const ctx = text + " " + node().name;
   const relevant = LORE.retrieve(ctx, 6).map(n=>"- "+n.text).join("\n");
   const recent = S.log.filter(e=>e.c==="you"||e.c==="llm").slice(-6).map(e=>e.t).join("\n");
+  const here = (node().items||[]).filter(i=>!hasItem(i)).map(itemName).join(", ")||"none listed";
   const sys = `World-builder for an equatorial castaway island (reef, palms, mangroves, goats, seabirds, jungle cats, parrots, sharks).
 Reply ONLY with JSON (no markdown, no reasoning):
 {"answer":"one vivid factual sentence answering the player","facts":["optional short lore facts"],"entities":[{"id":"snake_case","name":"display name","portable":true|false,"desc":"one short line"}]}
-Rules: no cold/volcanic life, no magic. Entities only if visible/usable at the current place. portable=true only for things the player could pick up.
+Rules: no cold/volcanic life, no magic. Entities only if visible/usable at the current place. portable=true only for things the player could pick up. Keep JSON complete and short.
 CONSTRAINTS: ${SPEC.constraints.join(" ")}
 PLACE: ${node().name}
+VISIBLE: ${here}
 LORE:\n${relevant||"(none)"}
 RECENT:\n${recent||"(none)"}`;
-  const c = await llmText(sys, text, 220);
+  const c = await llmText(sys, text, 450);
   if(!c) return null;
-  const j = extractJSON(c);
+  const j = salvageLoreJSON(c);
   if(j && j.answer){
-    j.answer = cleanGeneration(j.answer) || j.answer;
-    if(/need to keep|consistent with constraints|should mention/i.test(j.answer)) j.answer = "";
+    if(isJsonDump(j.answer)) j.answer = "";
+    else j.answer = cleanGeneration(j.answer) || j.answer;
+    if(/need to keep|consistent with constraints|should mention|according to the rules|entity wasn/i.test(j.answer)) j.answer = "";
     return j;
   }
+  if(isJsonDump(c)) return null;
   const cleaned = cleanGeneration(c);
   return cleaned ? {answer:cleaned, facts:[], entities:[]} : null;
 }
@@ -1034,9 +1066,15 @@ function flattenActions(parsed){
 }
 
 function normalizeParsed(a, fallbackSay){
+  let action = String(a.action||"look").toLowerCase();
+  let target = a.target||null;
+  // engine guard: salvage is wreck-cargo only; scavenging beach junk is take
+  if(action==="salvage" && target && !/^(tools|sailcloth|provisions|rifle|radio)$/i.test(String(target).trim())){
+    action = "take";
+  }
   return {
-    action: String(a.action||"look").toLowerCase(),
-    target: a.target||null,
+    action,
+    target,
     item: a.item||null,
     say: a.say||fallbackSay||null
   };
@@ -1048,14 +1086,18 @@ async function runPendingGen(pending){
     setThinking(true, "the voice weaves the world…");
     const out = await genLore(pending.query);
     setThinking(false);
-    if(out && out.answer){
-      pushLog(out.answer, "llm");
-      commitLore("gen:"+(LORE.seq+1), out.answer, {tags:["generated","lore"], text:out.answer});
+    if(out && (out.answer || (out.entities && out.entities.length) || (out.facts && out.facts.length))){
+      if(out.answer){
+        pushLog(out.answer, "llm");
+        commitLore("gen:"+(LORE.seq+1), out.answer, {tags:["generated","lore"], text:out.answer});
+      }
       for(const f of (out.facts||[])){
         if(!f || validateFactClient(f)) continue;
         commitLore("gen:"+(LORE.seq+1), f, {tags:["generated","lore"], text:f});
       }
       applyEntities(out.entities);
+      bridgeLoreToItems([out.answer].concat(out.facts||[]));
+      saveState();
     } else {
       pushLog("The gray offers no answer you can trust.","sys");
       toast("Lore generation failed or empty.","warn");
