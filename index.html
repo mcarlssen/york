@@ -191,11 +191,19 @@ async function pushLore() {
     const merged = d.merged != null ? d.merged : 0;
     const rejected = d.rejected || 0;
     dbgEvent("lore: push ok merged=" + merged + " rejected=" + rejected + (skipped ? (" clientSkipped=" + skipped) : ""));
-    for (const rej of (d.rejections || []).slice(0, 5)) {
+    for (const rej of (d.rejections || []).slice(0, 8)) {
       dbgEvent("lore: rejected " + (rej.id || "?") + " — " + (rej.why || ""));
     }
-    if (merged === 0 && rejected > 0) {
-      toast("Shared lore rejected " + rejected + " fact(s) — see Debug.", "warn");
+    // Surface rejections in-chat (not only Debug) so the validator can be tuned.
+    if (rejected > 0) {
+      const sample = (d.rejections || []).slice(0, 3).map(rej =>
+        (rej.id || "?") + ": " + (rej.why || "rejected")
+      ).join(" · ");
+      toast("Shared lore rejected " + rejected + " — " + sample, "warn");
+      game.appendLog(
+        "Shared lore held back " + rejected + " fact(s): " + sample,
+        "warn"
+      );
     }
     return { ok: true, pushed, skipped, merged, rejected, note: d.note || "" };
   } catch (e) {

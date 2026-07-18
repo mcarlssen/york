@@ -225,8 +225,10 @@ the canon, and it never lets a lore fact become (or impersonate) a world rule.
 ### Storage
 
 - **Production:** Upstash Redis (Vercel's supported Redis store after KV was sunset), key
-  `york:lore:<world>` (e.g. `york:lore:meridian`). Configure via `UPSTASH_REDIS_REST_URL`
-  and `UPSTASH_REDIS_REST_TOKEN` (your database's REST credentials).
+  `york:lore:<world>` (e.g. `york:lore:meridian`). Configure via either:
+  - Vercel Upstash integration: `KV_REST_API_URL` + `KV_REST_API_TOKEN` (auto-provisioned), or
+  - Upstash-native: `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN`.
+  (`REDIS_URL` / `KV_URL` are TCP URLs — not used by the REST client.)
 - **Dev / test:** when those env vars aren't set, the function falls back to a local JSON
   file at `.cache/shared-lore.json` so the whole flow runs without a Redis instance.
 
@@ -250,7 +252,8 @@ node scripts/test-shared-lore.mjs
 ## Deploy
 
 The game is static (`index.html`). The shared-lore API needs a Vercel deployment with an
-Upstash Redis database (set `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN`) and an
+Upstash Redis database — use the integration’s `KV_REST_API_URL` + `KV_REST_API_TOKEN`, or
+Upstash-native `UPSTASH_REDIS_REST_*` — and an
 `OPENROUTER_API_KEY` (used for the semantic canon check *and* the player LLM proxy at
 `/api/llm`). Optionally set `YORK_LLM_MODEL` to override the server-side interpretation model
 (defaults to `nvidia/nemotron-3-ultra-550b-a55b:free`). `window.YORK_API_BASE` defaults to
