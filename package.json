@@ -9,7 +9,10 @@
     "test:shared-lore": "node scripts/test-shared-lore.mjs",
     "test:world-memory": "node scripts/test-world-memory.mjs",
     "test": "node scripts/test-shared-lore.mjs && node scripts/test-world-memory.mjs",
-    "curate": "node scripts/curate-lore.mjs"
+    "curate": "node scripts/curate-lore.mjs",
+    "harness": "node harness/loop.mjs",
+    "harness:replay": "node harness/replay.mjs",
+    "test:harness": "node harness/tests/test-engine-adapter.mjs && node harness/tests/test-config.mjs && node harness/tests/test-run-spine.mjs && node harness/tests/test-player-prompt.mjs && node harness/tests/test-gen-smoke.mjs && node harness/tests/test-analyze.mjs && node harness/tests/test-report.mjs"
   },
   "dependencies": {
     "@upstash/redis": "^1.34.0"

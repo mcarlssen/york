@@ -12,6 +12,21 @@ reached through the server (`POST /api/llm`), which holds the `OPENROUTER_API_KE
 environment variable. Without a reachable server, the built-in offline parser runs the
 game entirely client-side.
 
+## Headless playtest harness
+
+Drive Meridian without the browser: fixture replay gate → spine / full / blind runs →
+analyze → harvest → optional critic → report.
+
+```bash
+npm run harness:replay -- harness/fixtures/survive-salvage-path.json
+RUNS_SPINE=1 RUNS_FULL=0 RUNS_BLIND=0 BASELINE=offline npm run harness
+npm run test:harness
+```
+
+Reports land in `harness/reports/<ts>/` (`report.md` + `metrics.json`). Set
+`CRITIC_ENABLED=true` for optional Player-proxy notes (never a “Fun” section). Harvest
+candidates: `harness/harvest/`. Config via `.env` / env (`RUNS_*`, `BASELINE`, models, caps).
+
 ## The core loop: the Wreck's Clock
 
 The brig Meridian is breaking up on the reef. Every turn her integrity falls. You wade out
