@@ -65,897 +65,121 @@
 
 <script type="module">
 import {
-  salvageLoreJSON, isJsonDump, captureWorldDelta, applyWorldDelta, placeCatalogMentions, extractJSON as extractJSONLib
-} from "./scripts/lib/world-memory.mjs";
+  createGame, offlineParse, flattenActions, normalizeParsed, extractJSON, validateFactClient
+} from "./src/engine.js";
 
-"use strict";
-
-/* ============================================================
-   WORLD DOC — the single source of truth for this world.
-   Mirrors openspec/world/world.json (the authoring source). A POC
-   embeds a copy so it runs from file:// with no fetch/build step.
-   The engine derives WORLD + SPEC from this; seedLore reads lore_seed
-   + ecology from it. Edit world.json to author the world, then
-   re-sync this embed.
-   ============================================================ */
-const WORLD_DOC = {
-  world_id: "meridian",
-  identity: { title:"The Gray Light: Wreck of the Meridian", tagline:"A castaway on a hostile shore. Loot the wreck before the sea takes it — then decide how you leave.", engine:"index.html" },
-  constraints: [
-    "Ecology is self-consistent with an equatorial castaway island: reef, palms, mangroves, feral goats, seabirds, jungle cats, parrots, sharks. No cold/temperate or volcanic life.",
-    "SIGNAL vs CONCEAL: a signal (fire/pyre/light) raises rescue chance AND predator/wildlife attention; brighter signal = more of both. Staying dark and quiet is safe but unseen.",
-    "Wildlife is the antagonist: sharks in the water, night predators on land, storms at sea. The jungle cat and parrot can be tamed and turned to the player's use.",
-    "THE WRECK'S CLOCK: wreck integrity falls every turn (tide and weather). At 0 the wreck breaks up and its un-salvaged items are lost forever.",
-    "NIGHT falls on a cycle; warmth falls each night and is restored by fire or shelter. At warmth 0, life falls.",
-    "Each meaningful action advances the tide/clock one tick.",
-    "A locked connection or container requires its key item in inventory before it opens.",
-    "The player cannot leave the open ocean until a craft (raft or balloon) is built and launched, or until a rescue is triggered by signal.",
-    "Man Friday is omitted; the companion is a tamed jungle cat (hunting/scouting) and/or a tamed parrot (warning/messenger)."
-  ],
-  lore_seed: [
-    { id:"seed",  subject:"the Meridian", relation:"is", object:"a merchant brig wrecked on a reef off an uninhabited equatorial island", tags:["world","wreck","setting"] },
-    { id:"you",   subject:"the player", relation:"is", object:"the sole survivor of the Meridian, washed ashore with nothing", tags:["player","survivor","lore"] },
-    { id:"island",subject:"the island", relation:"is", object:"a forested equatorial island with a reef, a jungle, a freshwater spring, and a high cliff", tags:["island","setting","ecology"] },
-    { id:"wreckclock", subject:"the wreck", relation:"has", object:"an integrity that falls each turn; at 0 it is gone and its cargo lost", tags:["wreck","rule","clock"] },
-    { id:"signal",subject:"a signal", relation:"draws", object:"both rescue (ships/planes) and predators (sharks, night hunters)", tags:["signal","rule","conceal"] },
-    { id:"warmth",subject:"night", relation:"drains", object:"warmth; fire or shelter restores it; at 0 warmth, life falls", tags:["night","warmth","rule"] },
-    { id:"cat",   subject:"a jungle cat", relation:"is", object:"a wild predator that can be tamed with food; once tamed it hunts and scouts", tags:["cat","companion","wildlife"] },
-    { id:"parrot",subject:"a parrot", relation:"is", object:"a wild bird that can be tamed; once tamed it warns of ships and predators", tags:["parrot","companion","wildlife"] },
-    { id:"paths", subject:"escape", relation:"may_be", object:"by raft, by hot-air balloon, by signal rescue, or by enduring on the island", tags:["escape","ending","rule"] }
-  ],
-  ecology: {
-    climate:"hot, humid, trade-wind, violent squalls",
-    terrain:["reef","shingle beach","mangrove flat","jungle interior","freshwater spring","basalt cliff"],
-    flora:["coconut palm","mangrove","breadfruit","wild fig","bamboo"],
-    fauna:["feral goat","jungle cat","parrot","crab","reef fish","seabird","shark"]
-  },
-  companions: {
-    cat:    { name:"the jungle cat", home:"jungle", tame_item:"goat_meat" },
-    parrot: { name:"the parrot", home:"cliff", tame_item:"fig" }
-  },
-  map: {
-    start:"beach", max_clock:16,
-    nodes: {
-      beach:      { name:"Shingle Beach", desc:"Where the sea spat you out. The Meridian lies broken on the reef, a hundred yards out. The jungle waits inland; the cove and your camp sit along the shore.", exits:{ west:"tide_pools", north:"jungle", east:"wreck_shore", up:"cliff", south:"cove", south_east:"camp" }, items:["driftwood","debris"] },
-      wreck_shore:{ name:"Wreck Shore", desc:"At low light you can wade toward the Meridian's hull. She is breaking up fast.", exits:{ west:"beach" }, salvage:true },
-      tide_pools: { name:"Tide Pools", desc:"Rock pools thick with crabs and shellfish; a seep of fresh water filters down.", exits:{ east:"beach" }, items:["crab","fresh_water"], forage:"food" },
-      jungle:     { name:"Jungle Interior", desc:"Close, green, loud with birds. Feral goats browse; something with yellow eyes watches from the figs.", exits:{ south:"beach", east:"spring", north:"cliff" }, items:["goat_meat","fig","bamboo"], cat_home:true },
-      spring:     { name:"Freshwater Spring", desc:"Cold sweet water wells from the rock. Life, here.", exits:{ west:"jungle" }, items:["fresh_water"], forage:"water" },
-      cliff:      { name:"The Cliff", desc:"A high bare promontory. From here you can see the whole reef — and be seen. A dead tree waits for a pyre.", exits:{ south:"jungle", down:"beach" }, build:"pyre", parrot_home:true },
-      cove:       { name:"Sheltered Cove", desc:"Calm water between two headlands. The place to build and launch a craft.", exits:{ south:"beach" }, build:"raft" },
-      camp:       { name:"Your Camp", desc:"A lean-to of palms and sailcloth you raised. Safe at night if the fire holds.", exits:{ south:"beach" }, build:"shelter" }
-    },
-    containers: {
-      wreck: { name:"The Meridian (wreck)", holds:{ tools:"a hatchet, a knife, rope", sailcloth:"canvas from the fallen sail", provisions:"hardtack, a jar of rum", rifle:"a sodden musket and shot", radio:"a waterproof wireless set" } }
-    },
-    items: {
-      tools:{name:"tools", desc:"hatchet, knife, rope — the means to build."},
-      sailcloth:{name:"sailcloth", desc:"canvas; shelters, sails, balloon envelope."},
-      provisions:{name:"provisions", desc:"hardtack and a jar of rum; staves off starvation, briefly."},
-      rifle:{name:"musket", desc:"sodden but serviceable; a noise that scares predators, a tool to hunt."},
-      radio:{name:"waterproof radio", desc:"a wireless set — if you can power and tune it, someone may answer."},
-      crab:{name:"crab", desc:"a tide-pool crab; food."},
-      goat_meat:{name:"goat meat", desc:"feral goat; real sustenance."},
-      fig:{name:"fig", desc:"wild fig; food and water."},
-      bamboo:{name:"bamboo", desc:"strong, light; raft and frame material."},
-      fresh_water:{name:"fresh water", desc:"the difference between life and the sun."},
-      driftwood:{name:"driftwood", desc:"sun-bleached wood washed ashore; useful for fire and building."},
-      pebbles:{name:"pebbles", desc:"smooth shingle stones; can be used as sling ammunition."},
-      shingle:{name:"shingle", desc:"beach pebbles; the shore is paved with them."},
-      debris:{name:"debris", desc:"wreckage fragments from the Meridian; scraps of wood and rope."},
-      shellfish:{name:"shellfish", desc:"mussels and clams from the tide pools; edible."}
-    }
-  }
-};
-
-/* Derive the engine's WORLD + SPEC from the world doc. */
-function buildWorld(doc){
-  // deep clone so play mutations never dirty the embedded WORLD_DOC
-  return {
-    start: doc.map.start,
-    maxClock: doc.map.max_clock,
-    nodes: JSON.parse(JSON.stringify(doc.map.nodes)),
-    containers: JSON.parse(JSON.stringify(doc.map.containers)),
-    items: JSON.parse(JSON.stringify(doc.map.items)),
-    companions: JSON.parse(JSON.stringify(doc.companions || {}))
-  };
-}
-const WORLD = buildWorld(WORLD_DOC);
-const WORLD_SEED = buildWorld(WORLD_DOC); // pristine snapshot for delta persist
-const SPEC = {
-  seed: (WORLD_DOC.identity.title+": "+WORLD_DOC.identity.tagline),
-  constraints: WORLD_DOC.constraints
-};
-function resetWorldFromSeed(){
-  const fresh = buildWorld(WORLD_DOC);
-  WORLD.nodes = fresh.nodes;
-  WORLD.items = fresh.items;
-  WORLD.containers = fresh.containers;
-  WORLD.companions = fresh.companions;
-}
-
-/* ============================================================
-   DETERMINISTIC ENGINE — the spine (derived from WORLD_DOC).
-   Map graph, inventory, life/storm/beam meters, locks, journals,
-   puzzles, win/lose. The LLM never changes this directly.
-   ============================================================ */
-
-const ENDINGS = {
-  rescue_ship: ["A SAIL ON THE HORIZON", "good",
-    "Smoke and mirror-flame do their work. A sail heaves up over the reef, and a boat comes for you. The Meridian took everything; the island gave you just enough. You leave the gray behind."],
-  raft_escape: ["THE OPEN OCEAN", "good",
-    "The raft slides off the cove into the blue. You ship the bamboo outrigger and point her west, away from the reef. Whether anyone finds you, you have chosen the sea over the island."],
-  balloon: ["INTO THE CLOUDS", "bittersweet",
-    "The envelope fills; the world tilts and shrinks beneath you. You rise above the squalls, free and alone, a castaway of the sky now. The island becomes a green speck and is gone."],
-  endure: ["THE ISLAND IS HOME", "bittersweet",
-    "The clock runs out and still you stand — shelter roofed, fire banked, the cat at your feet, the parrot on your shoulder. You came ashore with nothing. You are a person of this place now."],
-  perish: ["THE SEA KEEPS YOU", "bad",
-    "Your strength gives out on the sand. The wreck is gone, the fire is cold, and the island does not miss you. The tide comes, as it always does."]
-};
-
-let S = null;
-let LORE = null;          // persistent LoreGraph, loaded from storage or seeded
-
-/* ============================================================
-   LORE GRAPH — bounded, queryable world memory.
-   Facts are nodes {id,subject,relation,object,text,source,tags,turn};
-   related facts are linked by edges. Retrieval returns only the
-   top-K most relevant nodes for the current context, so the LLM
-   prompt never bloats. Persisted per world id across sessions.
-   ============================================================ */
-const LORE_STORE_KEY = "york_lore_v1";
-const GAME_STATE_KEY = "york_state_v1";
+const API_BASE = (typeof window !== "undefined" && window.YORK_API_BASE) || "/api";
 const WORLD_ID = "meridian";
 
-function saveState(){
-  try{
-    if(S){
-      S.worldDelta = captureWorldDelta(
-        { items: WORLD_SEED.items, nodes: WORLD_SEED.nodes },
-        { items: WORLD.items, nodes: WORLD.nodes }
-      );
-    }
-    localStorage.setItem(GAME_STATE_KEY, JSON.stringify(S));
-  }catch(e){}
-}
-function loadState(){
-  try{ return JSON.parse(localStorage.getItem(GAME_STATE_KEY) || "null"); }catch(e){ return null; }
-}
-
-function LoreGraph(){
-  this.nodes = {};        // id -> node
-  this.edges = [];        // {from,to,rel}
-  this.seq = 0;
-}
-LoreGraph.prototype.commit = function(subject, relation, object, opts){
-  opts = opts || {};
-  const id = opts.id || ("L"+(++this.seq));
-  const text = opts.text || [subject,relation,object].filter(Boolean).join(" ");
-  const node = { id, subject, relation, object, text,
-    source: opts.source||"system", tags: opts.tags||[], turn: opts.turn||0 };
-  this.nodes[id] = node;
-  if(opts.link) for(const t of [].concat(opts.link)) this.edges.push({from:id,to:t,rel:"related"});
-  return id;
-};
-// relevance = tag overlap + token overlap with the query
-LoreGraph.prototype.retrieve = function(query, k){
-  k = k||6;
-  const q = String(query||"").toLowerCase();
-  const qt = q.split(/[^a-z0-9]+/).filter(w=>w.length>2);
-  const scored = Object.values(this.nodes).map(n=>{
-    let score = 0;
-    const blob = (n.text+" "+n.tags.join(" ")+" "+(n.subject||"")+" "+(n.object||"")).toLowerCase();
-    for(const t of qt){ if(blob.includes(t)) score += 1; }
-    for(const tag of (n.tags||[])){ if(q.includes(tag.toLowerCase())) score += 2; }
-    return { n, score };
-  }).filter(x=>x.score>0);
-  scored.sort((a,b)=>b.score-a.score);
-  return scored.slice(0,k).map(x=>x.n);
-};
-LoreGraph.prototype.toJSON = function(){ return { nodes:this.nodes, edges:this.edges, seq:this.seq }; };
-LoreGraph.prototype.load = function(obj){
-  if(obj&&obj.nodes){ this.nodes=obj.nodes; this.edges=obj.edges||[]; this.seq=obj.seq||0; return true; } return false;
-};
-function persistLore(){ try{ localStorage.setItem(LORE_STORE_KEY+":"+WORLD_ID, JSON.stringify(LORE.toJSON())); }catch(e){} }
-function loadLore(){
-  try{
-    const raw = localStorage.getItem(LORE_STORE_KEY+":"+WORLD_ID);
-    if(raw){ const g=new LoreGraph(); if(g.load(JSON.parse(raw))) return g; }
-  }catch(e){}
-  return null;
-}
-
-function seedLore(g, doc){
-  doc = doc || WORLD_DOC;
-  // baseline lore_seed facts (idempotent by id)
-  for(const e of (doc.lore_seed||[])){
-    if(!g.nodes[e.id]) g.commit(e.subject, e.relation, e.object, { id:e.id, source:"spec", tags:e.tags||[], link:e.link });
-  }
-  // ecology becomes retrievable lore so the LLM answers environment questions consistently
-  const eco = doc.ecology || {};
-  if(eco.climate && !g.nodes["eco_climate"]) g.commit("the climate","is",eco.climate,{id:"eco_climate",source:"spec",tags:["ecology","climate"]});
-  for(const t of (eco.terrain||[])) if(!g.nodes["eco_terr_"+t]) g.commit("terrain includes", t, "", {id:"eco_terr_"+t,source:"spec",tags:["ecology","terrain",t.toLowerCase().replace(/[^a-z]/g,"")]});
-  for(const f of (eco.flora||[]))    if(!g.nodes["eco_flora_"+f]) g.commit("flora includes", f, "", {id:"eco_flora_"+f,source:"spec",tags:["ecology","flora",f.toLowerCase().replace(/[^a-z]/g,"")]});
-  for(const fa of (eco.fauna||[]))   if(!g.nodes["eco_fauna_"+fa]) g.commit("fauna includes", fa, "", {id:"eco_fauna_"+fa,source:"spec",tags:["ecology","fauna",fa.toLowerCase().replace(/[^a-z]/g,"")]});
-}
-
-/* ============================================================
-   SHARED MEMORY — three tiers, rules precedence preserved.
-   LOCAL (localStorage) is this player's private, organic play.
-   SHARED (server KV via /api/lore) is merged, rule-validated lore
-   from all players; new players bootstrap from it. CANONICAL
-   (world.json in repo) is curated by a human; the LLM/players
-   never write it. Only the curator promotes vetted shared facts.
-   Discoveries push immediately via commitLore → pushLore (best-effort);
-   session-end autoContribute retries anything that missed. Offline floor intact.
-   ============================================================ */
-const API_BASE = (typeof window!=="undefined" && window.YORK_API_BASE) || "/api";
-
-// Player-generated nodes worth sharing: those the engine created at play
-// (source "play" or "generated"), excluding spec-seeded baseline facts.
-function collectContributions(){
-  const out = [];
-  for(const n of Object.values(LORE.nodes)){
-    if(n.source==="play" || n.source==="generated" || (n.tags&&n.tags.includes("generated"))){
-      out.push({ id:n.id, subject:n.subject, relation:n.relation, object:n.object,
-                 text:n.text, tags:n.tags||[], source:n.source, world:WORLD_ID });
-    }
-  }
-  return out;
-}
-
-// Client-side pre-filter for an obviously rule-breaking fact (mirrors server).
-// Returns null if acceptable, or a reason string if it must be dropped.
-function validateFactClient(text){
-  const t = String(text||"").toLowerCase();
-  // ponytail: equatorial world — block cold/magic only (was wrongly rejecting jungle/tropical)
-  if(/volcanic|glacier|polar|tundra|permafrost|ice sheet|magic portal|dragon|unicorn|wizard|fairy/.test(t))
-    return "contradicts the world's ecology/identity constraints";
-  return null;
-}
-
-async function pushLore(){
-  const nodes = collectContributions();
-  if(!nodes.length) return { ok:true, pushed:0, skipped:0, note:"nothing new to share" };
-  // client pre-filter
-  let pushed=0, skipped=0;
-  const clean = nodes.filter(n=>{
-    const why = validateFactClient(n.text);
-    if(why){ skipped++; return false; }
-    pushed++; return true;
-  });
-  try{
-    const r = await fetch(API_BASE+"/lore",{
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ world:WORLD_ID, nodes:clean })
+const game = createGame({
+  llm: async (system, user, maxTokens) => {
+    const r = await fetch(API_BASE + "/llm", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ system, user, maxTokens: maxTokens || 200 })
     });
-    if(!r.ok) return { ok:false, pushed:0, skipped, why:"server rejected ("+r.status+")" };
-    const d = await r.json().catch(()=>({}));
-    return { ok:true, pushed: pushed, skipped: skipped, merged: d.merged||pushed, note:d.note||"" };
-  }catch(e){
-    return { ok:false, pushed:0, skipped, why:"network error (offline floor intact)" };
+    if (!r.ok) return null;
+    const d = await r.json().catch(() => ({}));
+    return d.content || null;
+  }
+});
+
+/* ---- shared-lore network (stays in thin view) ---- */
+async function pushLore() {
+  const nodes = game.listContributions();
+  if (!nodes.length) return { ok: true, pushed: 0, skipped: 0, note: "nothing new to share" };
+  let pushed = 0, skipped = 0;
+  const clean = nodes.filter(n => {
+    const why = validateFactClient(n.text);
+    if (why) { skipped++; return false; }
+    pushed++;
+    return true;
+  });
+  try {
+    const r = await fetch(API_BASE + "/lore", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ world: WORLD_ID, nodes: clean })
+    });
+    if (!r.ok) return { ok: false, pushed: 0, skipped, why: "server rejected (" + r.status + ")" };
+    const d = await r.json().catch(() => ({}));
+    return { ok: true, pushed, skipped, merged: d.merged || pushed, note: d.note || "" };
+  } catch (e) {
+    return { ok: false, pushed: 0, skipped, why: "network error (offline floor intact)" };
   }
 }
 
-async function pullLore(){
-  try{
-    const r = await fetch(API_BASE+"/lore?world="+encodeURIComponent(WORLD_ID));
-    if(!r.ok) return { ok:false, why:"server unavailable (using local + spec seed)" };
-    const d = await r.json().catch(()=>({}));
-    const shared = (d&&d.nodes)||[];
-    let added=0;
-    for(const n of shared){
-      // never overwrite a node the player already has (local precedence)
-      if(LORE.nodes[n.id]) continue;
-      LORE.commit(n.subject, n.relation, n.object,
-        { id:n.id, source:n.source||"shared", tags:(n.tags||[]).concat("shared"), turn:n.turn||0 });
-      added++;
-    }
-    if(added) persistLore();
-    return { ok:true, added };
-  }catch(e){ return { ok:false, why:"network error (using local + spec seed)" }; }
+async function pullLore() {
+  try {
+    const r = await fetch(API_BASE + "/lore?world=" + encodeURIComponent(WORLD_ID));
+    if (!r.ok) return { ok: false, why: "server unavailable (using local + spec seed)" };
+    const d = await r.json().catch(() => ({}));
+    const shared = (d && d.nodes) || [];
+    const added = game.mergeShared(shared);
+    return { ok: true, added };
+  } catch (e) {
+    return { ok: false, why: "network error (using local + spec seed)" };
+  }
 }
 
-// End-of-session flush: retries any discoveries that failed to push mid-play.
-// Primary path is commitLore → pushLore (immediate). Offline floor unchanged.
-async function autoContribute(){
+async function autoContribute() {
   const r = await pushLore();
-  if(r.ok && r.pushed>0){
-    pushLog(`Your discoveries drift out with the tide — ${r.pushed} shared with those who come after.${r.skipped?(" ("+r.skipped+" held back as off-rules)"):""}`,"fog");
+  if (r.ok && r.pushed > 0) {
+    game.appendLog(
+      `Your discoveries drift out with the tide — ${r.pushed} shared with those who come after.${r.skipped ? (" (" + r.skipped + " held back as off-rules)") : ""}`,
+      "fog"
+    );
   }
 }
 
-function newGame(freshStart = false){
-  S = {
-    loc: WORLD.start,
-    life: 100, warmth: 100, signal: 0, clock: 0,
-    wreck: 100,                  // the Wreck's Clock
-    night: false,
-    inv: [], flags: {}, tame: { cat:0, parrot:0 },
-    salvaged: {},
-    visited: {},
-    ended: false, endKind: null,
-    log: [],
-    worldDelta: null
-  };
-  // restore full game state from localStorage (persists across refresh) — unless fresh start
-  if(freshStart){
-    try{ localStorage.removeItem(GAME_STATE_KEY); }catch(e){}
-    resetWorldFromSeed();
-  } else {
-    resetWorldFromSeed();
-    const saved = loadState();
-    if(saved){
-      Object.assign(S, saved);
-      // ensure arrays/objects are proper
-      S.inv = S.inv || [];
-      S.flags = S.flags || {};
-      S.tame = S.tame || { cat:0, parrot:0 };
-      S.salvaged = S.salvaged || {};
-      S.visited = S.visited || {};
-      S.log = S.log || [];
-      if(S.worldDelta) applyWorldDelta(WORLD, S.worldDelta);
-    }
-  }
-  // load persistent lore graph if present (extends across sessions), else seed
-  LORE = loadLore() || new LoreGraph();
-  seedLore(LORE, WORLD_DOC); // idempotent: only adds absent baseline nodes
-  S.visited[S.loc]=true;
-  pushLog("The Meridian is kindling on the reef. You crawl ashore on the Shingle Beach, the only soul left of her.","sys");
-  pushLog("The wreck will not last the day. Salvage what you can — then decide how you leave this place.","sys");
-  // bootstrap from the SHARED world (best-effort; offline floor = local + spec seed).
-  pullLore().then(r=>{
-    if(r.ok && r.added>0){
-      pushLog(`The wider world remembers ${r.added} thing(s) others learned here.`,"fog");
-      render();
-    }
-  });
-  render();
-}
-
-function pushLog(t,cls){ S.log.push({t:String(t),c:cls||""}); saveState(); }
-
-/* ---- deterministic spatial + state helpers (used by engine AND LLM validation) ---- */
-function node(){ return WORLD.nodes[S.loc]; }
-function dirToNode(dir){
-  const e = node().exits || {};
-  return e[dir] || null;
-}
-function canTravel(dir){
-  const n = node();
-  if(n.lock && n.lock.dir===dir){
-    return { ok: S.inv.includes(n.lock.key), need:n.lock.key, text:n.lock.lockedText };
-  }
-  return { ok: !!dirToNode(dir) };
-}
-function hasItem(id){ return S.inv.includes(id); }
-function itemName(id){ return (WORLD.items[id]&&WORLD.items[id].name)||id; }
-
-// Register a new item dynamically in WORLD.items (for organic discovery)
-function registerItem(id, name, desc, tags, opts){
-  opts = opts || {};
-  if(!WORLD.items[id]){
-    WORLD.items[id] = { name, desc, tags: tags||[], portable: opts.portable!==false };
-  }
-  return WORLD.items[id];
-}
-
-// Apply structured lore entities (portable → location items). Rejects meta strings.
-function applyEntities(entities){
-  const n = node();
-  if(!n.items) n.items = [];
-  for(const e of (entities||[])){
-    if(!e || !e.id || !e.name) continue;
-    const id = String(e.id).toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"");
-    if(!id || id.length>40) continue;
-    if(/constraint|concise|factual|magic|volcanic|should mention|need to keep/i.test(e.name+" "+(e.desc||""))) continue;
-    const portable = e.portable!==false;
-    registerItem(id, e.name, e.desc||("You notice "+e.name+" here."), ["generated","lore"], {portable});
-    if(portable && !n.items.includes(id) && !hasItem(id)) n.items.push(id);
-  }
-}
-// Bridge: prose/facts that name catalog items make them takeable here.
-function bridgeLoreToItems(texts){
-  const n = node();
-  n.items = placeCatalogMentions(WORLD.items, n.items||[], S.inv, (texts||[]).filter(Boolean).join(" "));
-}
-
-/* ---- resolve a natural-language direction/target to an exit key ---- */
-function normalizeDir(t, exitKeys){
-  if(!t) return null;
-  let s = String(t).toLowerCase().trim();
-  s = s.replace(/^(to |the |a |an |into |towards |toward |through |up |down |in |out |at )+/g,"").trim();
-  const dirs = ["north_east","south_east","south_west","north_west","north","south","east","west","up","down","in","out",
-                "northeast","southeast","southwest","northwest"];
-  for(const d of dirs){
-    const plain = d.replace("_"," ");
-    if(s===d || s===plain || s.startsWith(d+" ") || s.startsWith(plain+" ") ||
-       new RegExp("\\b"+plain.replace(/ /g,"\\s*")+"\\b").test(s))
-      return d==="northeast"?"north_east":d==="southeast"?"south_east":d==="southwest"?"south_west":d==="northwest"?"north_west":d;
-  }
-  // destination name / alias match against current exits
-  for(const ek of exitKeys){
-    const destId = node().exits[ek];
-    const dest = WORLD.nodes[destId];
-    if(!dest) continue;
-    const name = dest.name.toLowerCase();
-    const id = destId.toLowerCase().replace(/_/g," ");
-    const blob = name+" "+id;
-    if(blob.includes(s) || s.includes(name.split(" ")[0]) || s.includes(id.split(" ")[0])) return ek;
-  }
-  // place-aware aliases (current exits only)
-  const alias = {wreck:"east", meridian:"east", jungle:"north", cliff:"up", cove:"south", camp:"south_east",
-                 tide:"west", pool:"west", pools:"west", spring:"east", beach:"south"};
-  for(const k in alias){ if(s.includes(k)){ const d=alias[k]; if(exitKeys.includes(d)) return d; } }
-  return null;
-}
-
-/* ---- the only ways state changes: apply an already-validated action ---- */
-function applyAction(a){
-  switch(a.action){
-    case "look": return describe();
-    case "examine": return doExamine(a.target);
-    case "go": return doGo(a.target);
-    case "take": return doTake(a.target);
-    case "salvage": return doSalvage(a.target);
-    case "use": return doUse(a.target, a.item);
-    case "build": return doBuild(a.target);
-    case "signal": return doSignal(a.target);
-    case "tame": return doTame(a.target);
-    case "launch": return doLaunch();
-    case "ask": return doAsk(a.target, a.say);
-    case "discover": return doDiscover(a.target || a.say);
-    case "eat": return doEat(a.target);
-    case "wait": return doWait();
-    default: return {ok:false, text:"The island does not record that action."};
-  }
-}
-
-function tick(){ S.clock = Math.min(WORLD.maxClock, S.clock+1); }
-function lifeDelta(d){ S.life = Math.max(0, Math.min(100, S.life+d)); }
-function warmthDelta(d){ S.warmth = Math.max(0, Math.min(100, S.warmth+d)); }
-function signalDelta(d){ S.signal = Math.max(0, Math.min(10, S.signal+d)); }
-function tameDelta(which,d){ S.tame[which]=Math.max(0,Math.min(10,S.tame[which]+d)); }
-
-function singularize(s){
-  const t=String(s||"").toLowerCase().trim();
-  if(t.endsWith("ies") && t.length>4) return t.slice(0,-3)+"y";
-  if(t.endsWith("ses")||t.endsWith("xes")||t.endsWith("zes")) return t.slice(0,-2);
-  if(t.endsWith("s") && !t.endsWith("ss") && t.length>3) return t.slice(0,-1);
-  return t;
-}
-
-function describe(){
-  const n = node();
-  let txt = `— ${n.name} —\n${n.desc}`;
-  const exits = Object.keys(n.exits||{});
-  if(exits.length) txt += `\n\nPaths: ${exits.join(", ")}.`;
-  const here = (n.items||[]).filter(i=>!hasItem(i));
-  if(here.length) txt += `\nYou can see: ${here.map(itemName).join(", ")}.`;
-  if(n.salvage) txt += `\nThe Meridian groans on the reef (integrity ${S.wreck}). Salvage a cargo: tools, sailcloth, provisions, rifle, radio.`;
-  if(n.build) txt += `\nYou could build here (${n.build}).`;
-  if(n.cat_home && !S.tame.cat) txt += `\nA jungle cat watches from the green. (tame it with goat meat)`;
-  if(n.parrot_home && !S.tame.parrot) txt += `\nA parrot cocks its head. (tame it with a fig)`;
-  return {ok:true, text:txt, cls:"good"};
-}
-
-function doExamine(t){
-  if(!t) return {ok:false,text:"Examine what?"};
-  const tgt = String(t).toLowerCase();
-  const n = node();
-  const itemHere = matchItem((n.items||[]), tgt);
-  if(itemHere) return {ok:true, text:WORLD.items[itemHere].desc, cls:"good"};
-  const itemInv = S.inv.find(i=>i===tgt.replace(/_/g," ")||itemName(i).toLowerCase()===tgt.replace(/_/g," ")||itemName(i).toLowerCase().includes(tgt));
-  if(itemInv) return {ok:true, text:WORLD.items[itemInv].desc, cls:"good"};
-  if(tgt.length>2 && !/here|room|place|around|surroundings/.test(tgt)){
-    return {ok:true, text:`You study ${t}.`, cls:"good", pendingGen:{type:"lore", query:"Describe "+t+" on the Meridian's island, an equatorial castaway isle with reef, jungle, goats, cats, parrots, sharks."}};
-  }
-  return {ok:true, text:`You study ${t}. ${n.desc}`, cls:"good"};
-}
-
-function doGo(t){
-  if(!t) return {ok:false, text:"Go where?"};
-  const dir = normalizeDir(t, Object.keys(node().exits||{}));
-  if(!dir) return {ok:false, text:"There is no such way from here.", cls:"warn"};
-  const chk = canTravel(dir);
-  if(!chk.ok){
-    return {ok:false, text:(chk.text||"That way is blocked."), cls:"warn"};
-  }
-  const dest = dirToNode(dir);
-  S.loc = dest; S.visited[dest]=true; tick();
-  // wreck salvage adjacency: being at wreck_shore ages the wreck faster
-  if(dest==="wreck_shore") ageWreck(4); else ageWreck(2);
-  const r = describe();
-  checkEnd();
-  return r;
-}
-
-function matchItem(here, tgt){
-  const t=singularize(String(tgt).toLowerCase().replace(/_/g," ").trim());
-  return here.find(i=>{
-    if(hasItem(i)) return false;
-    const n=itemName(i).toLowerCase();
-    const id=i.replace(/_/g," ");
-    return i===t || id===t || singularize(n)===t || n.includes(t) || t.includes(singularize(n)) ||
-      i.includes(t.replace(/ /g,"_")) || singularize(id)===t;
-  });
-}
-function doTake(t){
-  if(!t) return {ok:false, text:"Take what?"};
-  // multi-take: "fig and bamboo" / "fig, bamboo"
-  const parts = String(t).split(/\s+and\s+|,\s*/).map(x=>x.trim()).filter(Boolean);
-  if(parts.length>1){
-    const got=[], miss=[];
-    for(const p of parts){
-      const r=doTake(p);
-      if(r.ok) got.push(p); else miss.push(p);
-    }
-    if(got.length) return {ok:true, text:`You take: ${got.join(", ")}.${miss.length?(" Missing: "+miss.join(", ")+"."):""}`, cls:"good"};
-    return {ok:false, text:`There is none of that here to take.`, cls:"warn"};
-  }
-  const n=node();
-  const it=matchItem((n.items||[]), t);
-  if(!it) return {ok:false, text:`There is no ${t} here to take.`, cls:"warn"};
-  S.inv.push(it); tick(); ageWreck(1);
-  return {ok:true, text:`You take the ${itemName(it)}.`, cls:"good"};
-}
-
-// The Wreck's Clock: salvage pulls one cargo category; wreck integrity falls each turn.
-function doSalvage(t){
-  if(S.loc!=="wreck_shore") return {ok:false, text:"You must be at the Wreck Shore to salvage the Meridian.", cls:"warn"};
-  if(S.wreck<=0) return {ok:false, text:"The Meridian has broken up and sunk. Her cargo is lost to the reef.", cls:"warn"};
-  const cat = (t||"").toLowerCase();
-  const holds = WORLD.containers.wreck.holds;
-  const key = Object.keys(holds).find(k=> k===cat || holds[k].toLowerCase().includes(cat) || cat.includes(k));
-  if(!key) return {ok:false, text:"Salvage what? (tools, sailcloth, provisions, rifle, radio)", cls:"warn"};
-  if(S.salvaged[key]) return {ok:false, text:`You already stripped the ${key} from the wreck.`, cls:"warn"};
-  S.inv.push(key); S.salvaged[key]=true; tick(); ageWreck(3);
-  let txt = `You wrest ${holds[key]} from the dying hull.`;
-  if(key==="radio") txt += " The wireless is sealed in oilskin — it might still work.";
-  if(S.wreck<=0) txt += " Even as you climb clear, the Meridian comes apart behind you.";
-  return {ok:true, text:txt, cls:"good"};
-}
-
-function ageWreck(d){
-  if(S.wreck<=0) return;
-  S.wreck = Math.max(0, S.wreck - d);
-  if(S.wreck===0){ pushLog("The Meridian breaks her back on the reef and is gone. Anything not yet salvaged is lost.","bad"); }
-}
-
-function doUse(t, item){
-  const tgt=String(t||"").toLowerCase();
-  const it=String(item||t||"").toLowerCase();
-  if((tgt.includes("rifle")||it.includes("rifle")||it.includes("musket")) && hasItem("rifle")){
-    return {ok:true, text:"You level the musket. The report sends the wildlife bolting — and warns the sharks you are here. (useful to hunt or scare, but loud)", cls:"warn", lore:"The musket's report scares predators but draws the sea's attention."};
-  }
-  if((tgt.includes("radio")||it.includes("radio")||it.includes("wireless")) && hasItem("radio")){
-    return {ok:true, text:"You key the wireless. Static, then a voice through the storm: \"...any survivor, this is the trading schooner *Avis*... we hold offshore at the reef...\" — if you raise a signal, they will come.", cls:"fog", lore:"The wireless reaches the schooner Avis, holding offshore; a signal will bring rescue."};
-  }
-  // emergent: let the LLM propose a validated outcome
-  return {ok:true, text:"You act.", cls:"fog", pendingGen:{type:"emerge", query: (item?item+" ":"")+(t||"") || "that action"}};
-}
-
-function doAsk(t, say){
-  const q = String(say||t||"").toLowerCase();
-  // ponytail: only exact tutorial phrasing gets canned text; everything else → genLore
-  if(/^(how (do i|can i) (tame|befriend)|how to tame)\b/.test(q) || q==="tame?" || q==="companions?"){
-    return {ok:true, text:`The cat, if tamed, hunts and scouts. The parrot, if tamed, warns of ships and predators. Feed them (goat meat / fig) where they live to win them.`, cls:"fog"};
-  }
-  if(/^(how (do i|can i) (signal|escape|get rescued)|what is signal)\b/.test(q)){
-    return {ok:true, text:`A signal fire on the cliff draws rescue — and predators. Bright signal, more of both. Build a pyre there, or tune the radio if you salvaged it.`, cls:"fog"};
-  }
-  if(/^(what (can i|do i) salvage|how (do i|can i) salvage)\b/.test(q)){
-    return {ok:true, text:`The Meridian is breaking up on the reef. Her cargo — tools, sailcloth, provisions, a musket, a wireless — is yours if you take it before the sea does.`, cls:"fog"};
-  }
-  return {ok:true, text:`You put the question to the island.`, cls:"fog", pendingGen:{type:"lore", query:say||t||"?"}};
-}
-
-function doDiscover(t){
-  const q = String(t||"").trim();
-  return {
-    ok:true,
-    text:"You search for a way onward…",
-    cls:"fog",
-    pendingGen:{ type:"place", query: q || "What lies near here?" }
-  };
-}
-
-function doBuild(t){
-  const what = (t||"").toLowerCase();
-  const n = node();
-  if(!n.build) return {ok:false, text:"There is nothing to build here.", cls:"warn"};
-  if(n.build!==what && !["raft","pyre","shelter","balloon"].includes(what)) 
-    return {ok:false, text:`Here you can build: ${n.build}.`, cls:"warn"};
-  if(what==="raft"){
-    if(S.flags.raftBuilt) return {ok:true, text:"The raft is already built. Launch it.", cls:"good"};
-    if(!hasItem("tools")||!hasItem("sailcloth")||!hasItem("bamboo"))
-      return {ok:false, text:"A raft needs tools, sailcloth, and bamboo.", cls:"warn"};
-    S.flags.raftBuilt=true; tick();
-    return {ok:true, text:"You lash bamboo into an outrigger and rig the sailcloth. A sea-worthy raft. (launch it to leave)", cls:"good"};
-  }
-  if(what==="pyre"){
-    if(S.flags.pyreBuilt) return {ok:true, text:"The pyre stands ready on the cliff. Feed it to signal.", cls:"good"};
-    if(!hasItem("tools")&&!hasItem("bamboo")) return {ok:false, text:"You need tools or bamboo to raise a pyre.", cls:"warn"};
-    S.flags.pyreBuilt=true; tick();
-    return {ok:true, text:"You stack bamboo and driftwood into a pyre on the cliff, ready to light.", cls:"good"};
-  }
-  if(what==="shelter"){
-    if(S.flags.shelterBuilt) return {ok:true, text:"Your camp is already standing.", cls:"good"};
-    if(!hasItem("tools")&&!hasItem("sailcloth")) return {ok:false, text:"A shelter needs tools or sailcloth.", cls:"warn"};
-    S.flags.shelterBuilt=true; tick();
-    return {ok:true, text:"You raise a lean-to of palms and sailcloth. A roof against the squall, a hearth within.", cls:"good"};
-  }
-  if(what==="balloon"){
-    if(S.flags.balloonBuilt) return {ok:true, text:"The balloon envelope is already sewn. Launch it.", cls:"good"};
-    if(!hasItem("sailcloth")||!hasItem("tools")) return {ok:false, text:"A balloon needs sailcloth and tools.", cls:"warn"};
-    S.flags.balloonBuilt=true; tick();
-    return {ok:true, text:"You sew the sailcloth into an envelope and cage it with bamboo. Mad, but it might fly. (launch it to leave)", cls:"bittersweet"};
-  }
-  return {ok:false, text:"You can't build that here.", cls:"warn"};
-}
-
-function doSignal(t){
-  if(!S.flags.pyreBuilt) return {ok:false, text:"You need a pyre on the cliff before you can signal. (build pyre)", cls:"warn"};
-  if(S.loc!=="cliff") return {ok:false, text:"The pyre is on the cliff. Go there to feed it.", cls:"warn"};
-  signalDelta(3); warmthDelta(2); tick();
-  let txt="You feed the pyre; smoke and flame climb into the blue. Signal +3 — rescue may see it. So may the sharks and the things that hunt at night.";
-  // a high signal with a way to be heard/seen can trigger rescue
-  if(S.signal>=8 && (hasItem("radio")||S.tame.parrot>=5)){
-    pushLog("Smoke on the horizon resolves into a sail — the schooner *Avis* answers your signal.","good");
-    endGame("rescue_ship");
-  }
-  return {ok:true, text:txt, cls:"warn"};
-}
-
-function doTame(t){
-  const which = (t||"").toLowerCase().includes("parrot") ? "parrot" : (t||"").toLowerCase().includes("cat") ? "cat" : null;
-  if(!which) return {ok:false, text:"Tame what? (the cat, the parrot)", cls:"warn"};
-  const c = WORLD.companions[which];
-  if(S.loc!==c.home) return {ok:false, text:`The ${which} is not here. It lives at the ${c.home}.`, cls:"warn"};
-  if(S.tame[which]>=10) return {ok:true, text:`The ${which} is already yours.`, cls:"good"};
-  if(!hasItem(c.tame_item)) return {ok:false, text:`You need ${c.tame_item} to tame the ${which}.`, cls:"warn"};
-  // consume one unit of the tame item
-  const i=S.inv.indexOf(c.tame_item); if(i>=0) S.inv.splice(i,1);
-  tameDelta(which, 10); tick();
-  const name = which==="cat" ? "The jungle cat" : "The parrot";
-  return {ok:true, text:`You offer the ${c.tame_item}. ${name} settles, decides you are not prey. It is yours now — and useful.`, cls:"good"};
-}
-
-function doLaunch(){
-  if(S.flags.raftBuilt){ endGame("raft_escape"); return {ok:true,text:""}; }
-  if(S.flags.balloonBuilt){ endGame("balloon"); return {ok:true,text:""}; }
-  return {ok:false, text:"You have no craft to launch. (build raft / balloon)", cls:"warn"};
-}
-
-function doEat(t){
-  const tgt=String(t||"").toLowerCase();
-  const food = ["crab","goat_meat","fig","provisions","fresh_water"].find(f=> tgt.includes(f) || (WORLD.items[f]&&WORLD.items[f].name.toLowerCase().includes(tgt)));
-  if(!food) return {ok:false, text:"You have nothing like that to eat or drink.", cls:"warn"};
-  const i=S.inv.indexOf(food); if(i<0 && !["fresh_water"].includes(food)) return {ok:false, text:`You don't have ${food}.`, cls:"warn"};
-  if(i>=0) S.inv.splice(i,1);
-  lifeDelta(food==="fresh_water"?8:14); tick(); ageWreck(0);
-  return {ok:true, text:`You eat/drink the ${WORLD.items[food].name}. Life restored.`, cls:"good"};
-}
-
-function doWait(){
-  tick(); ageWreck(2);
-  // night cycle: warmth falls, mitigated by shelter/fire
-  S.night = !S.night;
-  if(S.night){
-    const mit = (S.flags.shelterBuilt?30:0) + (S.flags.pyreBuilt&&S.signal>0?20:0);
-    const drop = Math.max(0, 25 - mit);
-    warmthDelta(-drop); lifeDelta(-3);
-    let txt=`Night falls. Warmth -${drop}, life -3.`;
-    if(S.warmth<=0) txt += " The cold bites deep.";
-    checkEnd();
-    return {ok:true, text:txt, cls:"warn"};
-  }
-  return {ok:true, text:"You rest through the heat of the day. The clock advances; the wreck ages.", cls:"warn"};
-}
-
-/* ---- win / lose ---- */
-function checkEnd(){
-  if(S.ended) return;
-  if(S.life<=0){ endGame("perish"); return; }
-  if(S.warmth<=0){ lifeDelta(-8); if(S.life<=0){ endGame("perish"); return; } }
-  if(S.clock>=WORLD.maxClock){
-    // survived to the end of the clock
-    if(S.flags.shelterBuilt && S.life>0) endGame("endure");
-    else if(S.signal>=8 && (hasItem("radio")||S.tame.parrot>=5)) endGame("rescue_ship");
-    else endGame("perish");
-  }
-}
-
-// commit a lore fact discovered this turn into the persistent graph
-// opts: {tags:[], id: stableId} — pass a stable id (e.g. journal id) to avoid duplicates
-function commitLore(key, fact, opts){
-  if(!fact) return;
-  opts = opts || {};
-  // Use the key as the stable ID to prevent duplicates and overwrites
-  const stableId = opts.id || key || ("T"+(LORE.seq+1));
-  LORE.commit(key, "is", fact, { source:"play", tags: opts.tags||["discovered"], turn: S.clock,
-    id: stableId, text: opts.text || fact });
-  persistLore();
-  // push immediately so admin/curators see it without waiting for session end
-  pushLore();
-}
-
-function endGame(kind){
-  S.ended=true; S.endKind=kind;
-  const e=ENDINGS[kind];
-  pushLog(e[2], e[1]);
-  render();
-  showEnd(e[0], e[2], e[1]);
-}
-
-/* ============================================================
-   LLM LAYER — interpret plain language into an action JSON,
-   then validate against the deterministic engine. Offline
-   regex fallback when no key / call fails (the spine always works).
-   ============================================================ */
-// ponytail: ACTION_VERB map deleted — offlineParse regex is the offline spine
-function offlineParse(text){
-  const t = text.toLowerCase().trim();
-  const one = (action, target, item, say)=> ({action, target:target||null, item:item||null, say:say||text});
-
-  // compound: "go down, then swim to the wreck"
-  if(/\bthen\b/.test(t)){
-    const parts = t.split(/\s+then\s+/).map(x=>x.trim()).filter(Boolean);
-    if(parts.length>1) return {actions: parts.map(p=>offlineParse(p))};
-  }
-
-  // questions
-  if(t.endsWith("?") || /^(what|where|how|why|who|is there|can i|do i|did i|should i|would i|could i)\b/.test(t)){
-    if(/\b(look around|describe|where am i|survey|scan)\b/.test(t)) return one("look");
-    if(/\bwhat can i see\b/.test(t) && !/\bon\b/.test(t)) return one("look");
-    const topicMatch = t.match(/^(what|where|how|why|who|is there|can i|do i|did i|should i|would i|could i)\b\s*(.+)/i);
-    let topic = topicMatch ? topicMatch[2].replace(/\?$/,"").trim() : t.replace(/\?$/,"").trim();
-    const locationMatch = topic.match(/\b(on|at|in|near|around|about)\s+(\w+(?:\s+\w+)?)\b/i);
-    if(locationMatch) topic = locationMatch[2];
-    return one("ask", topic||"general", null, text);
-  }
-
-  if(/\bsalvage\s+(everything|all|it all)\b/.test(t))
-    return one("ask", null, null, "What do you want to salvage from the wreck? Categories: tools, sailcloth, provisions, rifle, radio.");
-
-  const give = t.match(/\b(?:give|offer|feed)\s+(.+?)\s+to\s+(?:the\s+)?(.+)$/);
-  if(give && /cat|parrot|jaguar/.test(give[2])) return one("tame", give[2]);
-
-  const throwAt = t.match(/\b(?:throw|toss|hurl|use)\s+(.+?)\s+(?:at|on|toward|towards)\s+(.+)$/);
-  if(throwAt) return one("use", throwAt[2], throwAt[1]);
-
-  const goTo = t.match(/^(?:go|walk|head|run|move)(?:\s+to)?\s+(.+)$/);
-  if(goTo) return one("go", goTo[1].replace(/^(the|a|an)\s+/,"").trim());
-
-  const swim = t.match(/\b(?:swim|wade|cross)\s+(?:to|out to|toward|towards)\s+(?:the\s+)?(.+)$/);
-  if(swim) return one("go", swim[1].trim());
-
-  for(const d of ["north","south","east","west","up","down","in","out","northwest","northeast","southwest","southeast"]){
-    if(new RegExp("^"+d+"$").test(t)) return one("go", d);
-  }
-
-  if(/\b(look around|describe|where am i|what can i see|survey|scan|look$)\b/.test(t))
-    return one("look");
-
-  const examineMatch = t.match(/\b(examine|look at|inspect|read|check)\s+(.+)$/);
-  if(examineMatch) return one("examine", examineMatch[2].trim());
-
-  if(/\b(discover|explore beyond|find a new place|scout for a path|scout ahead)\b/.test(t)){
-    const m = t.match(/\b(?:discover|explore beyond|find a new place|scout for a path|scout ahead)\s*(.*)$/);
-    return one("discover", (m && m[1] || "").trim() || null, null, text);
-  }
-
-  const takeMatch = t.match(/\b(take|pick up|pick|collect|get|grab|scavenge|find|gather|fetch)\s+(.+)$/);
-  if(takeMatch){
-    let target = takeMatch[2].trim().replace(/^(the|a|an|some)\s+/,"");
-    if(/\beverything\b|\ball\b/.test(target)){
-      const here=(node().items||[]).filter(i=>!hasItem(i));
-      if(here.length) return {actions: here.map(i=>one("take", itemName(i)))};
-      return one("look");
-    }
-    return one("take", target);
-  }
-
-  const salvageMatch = t.match(/\bsalvage\s+(tools|sailcloth|provisions|rifle|radio)\b/);
-  if(salvageMatch) return one("salvage", salvageMatch[1]);
-
-  const useMatch = t.match(/\buse\s+(.+?)(?:\s+on\s+(.+))?$/);
-  if(useMatch) return one("use", useMatch[2]||null, useMatch[1].trim());
-
-  const buildMatch = t.match(/\b(build|craft)\s+(.+)$/);
-  if(buildMatch) return one("build", buildMatch[2].trim());
-
-  if(/\b(signal|light signal|make signal|build signal)\b/.test(t)) return one("signal");
-
-  const tameMatch = t.match(/\b(tame|befriend)\s+(.+)$/);
-  if(tameMatch) return one("tame", tameMatch[2].trim());
-
-  const launchMatch = t.match(/\blaunch\s+(?:the\s+)?(.+)$/);
-  if(launchMatch) return one("launch", launchMatch[1].trim());
-
-  const eatMatch = t.match(/\b(eat|drink|consume)\s+(.+)$/);
-  if(eatMatch) return one("eat", eatMatch[2].trim());
-
-  if(/\b(wait|rest|sleep|pass time|hold)\b/.test(t)) return one("wait");
-
-  return one("ask", "intent", null, text);
-}
-
-function toast(msg, kind){
+function toast(msg, kind) {
   const host = document.getElementById("toasts");
-  if(!host) return;
+  if (!host) return;
   const el = document.createElement("div");
-  el.className = "toast "+(kind||"info");
+  el.className = "toast " + (kind || "info");
   el.textContent = msg;
   host.appendChild(el);
-  setTimeout(()=>el.remove(), 4200);
+  setTimeout(() => el.remove(), 4200);
 }
 
-// Proxy player LLM calls through the server. Retries 429 once.
-// status: ok | empty | rate_limit | server_error | unreachable
-async function callLLMProxy(system, user, maxTokens){
-  async function once(){
+async function callLLMProxy(system, user, maxTokens) {
+  async function once() {
     let r;
-    try{
-      r = await fetch(API_BASE+"/llm",{
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({ system, user, maxTokens:maxTokens||200 })
+    try {
+      r = await fetch(API_BASE + "/llm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ system, user, maxTokens: maxTokens || 200 })
       });
-    }catch(e){ return { content:null, status:"unreachable", code:0 }; }
-    if(r.status===429) return { content:null, status:"rate_limit", code:429 };
-    if(r.status>=500) return { content:null, status:"server_error", code:r.status };
-    if(!r.ok) return { content:null, status:"server_error", code:r.status };
-    const d = await r.json().catch(()=>({}));
+    } catch (e) {
+      return { content: null, status: "unreachable", code: 0 };
+    }
+    if (r.status === 429) return { content: null, status: "rate_limit", code: 429 };
+    if (r.status >= 500) return { content: null, status: "server_error", code: r.status };
+    if (!r.ok) return { content: null, status: "server_error", code: r.status };
+    const d = await r.json().catch(() => ({}));
     const c = (d && d.content) || null;
-    return { content:c, status: c ? "ok" : "empty", code:r.status };
+    return { content: c, status: c ? "ok" : "empty", code: r.status };
   }
   let out = await once();
-  if(out.status==="rate_limit"){
-    await new Promise(r=>setTimeout(r, 1200));
+  if (out.status === "rate_limit") {
+    await new Promise(r => setTimeout(r, 1200));
     out = await once();
   }
   return out;
 }
 
-async function llmText(system, user, maxTokens){
-  const { content } = await callLLMProxy(system, user, maxTokens);
-  return content || null;
-}
-
-function cleanGeneration(raw){
-  if(!raw) return "";
-  if(isJsonDump(raw)) return "";
-  let s = raw.replace(/```[a-z]*|```/gi,"").replace(/\s*\n\s*/g," ").trim();
-  const marker = s.match(/\b(however,?|so,?|in short,?|in brief,?|answer:?|the answer is:?|in conclusion,?)\s+(.+)$/i);
-  if(marker && marker[2].length > 10) s = marker[2];
-  const meta = /^(the user|the player|i (need|should|must|will|think|am|would)|you (are|need|should|must|can|will)|given (the|these|this)|this (seems|is|appears)|here('?s| is)|let me|based on|to answer|it seems|my (task|goal|response)|but need|should mention|need to keep|consistent with|no magic|maybe the|according to the rules)/i;
-  const leak = /need to keep|concise|factual|consistent with constraints|should mention|no magic|no cold|according to the rules|entity wasn'?t|entities should/i;
-  const sentences = s.split(/(?<=[.!?])\s+/).map(x=>x.trim()).filter(Boolean);
-  const kept = sentences.filter(x=>!meta.test(x) && !leak.test(x));
-  let out = (kept.length ? kept : sentences.filter(x=>!leak.test(x))).join(" ");
-  out = out.replace(/^(answer:?|response:?|sure,?|certainly,?|ok,?|well,?)\s*/i,"").trim();
-  if(leak.test(out) || isJsonDump(out)) return "";
-  if(out.length > 400) out = out.slice(0,397).replace(/\s+\S*$/,"") + "…";
-  return out;
-}
-
-async function callLLM(text){
-  const ctx = text + " " + node().name + " " + (S.inv.map(itemName).join(" "));
-  const relevant = LORE.retrieve(ctx, 6).map(n=>"- "+n.text).join("\n");
-  const recent = S.log.slice(-8).map(e=>e.t).join("\n");
-  const exits = Object.keys(node().exits||{}).map(k=>k+"→"+WORLD.nodes[node().exits[k]].name).join(", ");
-  const here = (node().items||[]).filter(i=>!hasItem(i)).map(itemName).join(", ")||"none listed";
+async function callLLM(text) {
+  const ctx = game.parseContext(text);
   const sys = `You convert player commands into JSON for a castaway text adventure.
 Return ONLY JSON (no markdown). Prefer a single action object.
 For compound commands use: {"actions":[...action objects...]}.
 Schema per action: {"action":"go|take|examine|salvage|use|build|signal|tame|launch|eat|ask|look|wait|discover","target":string|null,"item":string|null,"say":string|null}.
 
-Rules: ${SPEC.constraints.join(" ")}
-Place: ${node().name}. Exits: ${exits||"none"}. Visible: ${here}. Inventory: ${S.inv.map(itemName).join(", ")||"empty"}.
-Lore:\n${relevant||"(none)"}
-Recent:\n${recent}
+Rules: ${ctx.constraints}
+Place: ${ctx.place}. Exits: ${ctx.exits || "none"}. Visible: ${ctx.here}. Inventory: ${ctx.inventory}.
+Lore:\n${ctx.lore || "(none)"}
+Recent:\n${ctx.recent}
 
 Priority:
 1. Questions → ask (say=full question). Exception: bare "look around"/"what can i see" → look.
@@ -970,178 +194,10 @@ Priority:
   return { parsed: extractJSON(content || ""), status, code };
 }
 
-function extractJSON(raw){
-  return extractJSONLib(raw);
-}
-
-/* ============================================================
-   PROCEDURAL LAYER — the LLM generates world content, the engine
-   validates it against the ruleset before committing. This is the
-   "rules by which the world is governed" in action: the model may
-   PROPOSE, but only the engine may ESTABLISH.
-   ============================================================ */
-
-// Structured lore answer. Returns {answer, facts, entities} or null.
-async function genLore(text){
-  const ctx = text + " " + node().name;
-  const relevant = LORE.retrieve(ctx, 6).map(n=>"- "+n.text).join("\n");
-  const recent = S.log.filter(e=>e.c==="you"||e.c==="llm").slice(-6).map(e=>e.t).join("\n");
-  const here = (node().items||[]).filter(i=>!hasItem(i)).map(itemName).join(", ")||"none listed";
-  const sys = `World-builder for an equatorial castaway island (reef, palms, mangroves, goats, seabirds, jungle cats, parrots, sharks).
-Reply ONLY with JSON (no markdown, no reasoning):
-{"answer":"one vivid factual sentence answering the player","facts":["optional short lore facts"],"entities":[{"id":"snake_case","name":"display name","portable":true|false,"desc":"one short line"}]}
-Rules: no cold/volcanic life, no magic. Entities only if visible/usable at the current place. portable=true only for things the player could pick up. Keep JSON complete and short.
-CONSTRAINTS: ${SPEC.constraints.join(" ")}
-PLACE: ${node().name}
-VISIBLE: ${here}
-LORE:\n${relevant||"(none)"}
-RECENT:\n${recent||"(none)"}`;
-  const c = await llmText(sys, text, 450);
-  if(!c) return null;
-  const j = salvageLoreJSON(c);
-  if(j && j.answer){
-    if(isJsonDump(j.answer)) j.answer = "";
-    else j.answer = cleanGeneration(j.answer) || j.answer;
-    if(/need to keep|consistent with constraints|should mention|according to the rules|entity wasn/i.test(j.answer)) j.answer = "";
-    return j;
-  }
-  if(isJsonDump(c)) return null;
-  const cleaned = cleanGeneration(c);
-  return cleaned ? {answer:cleaned, facts:[], entities:[]} : null;
-}
-
-async function genEmergent(query){
-  const sys = `Narrate one short outcome for a castaway on an equatorial island.
-Return ONLY JSON: {"text":"1-2 sentences","lifeDelta":0,"consumeItem":null|"item_id","lore":null|"short fact"}
-Allowed lifeDelta: -15..+5. consumeItem only if item is in inventory. No magic. No inventing new inventory except consume.
-Place: ${node().name}. Inventory: ${S.inv.map(itemName).join(", ")||"empty"}.`;
-  const c = await llmText(sys, "Player attempts: "+query, 160);
-  const j = extractJSON(c||"");
-  if(!j || !j.text) return {ok:false, text:"Nothing comes of it.", cls:"warn"};
-  const text = cleanGeneration(j.text) || j.text;
-  if(typeof j.lifeDelta==="number" && j.lifeDelta>=-15 && j.lifeDelta<=5) lifeDelta(j.lifeDelta);
-  if(j.consumeItem && hasItem(j.consumeItem)){
-    const i=S.inv.indexOf(j.consumeItem); if(i>=0) S.inv.splice(i,1);
-  }
-  tick(); ageWreck(1);
-  return {ok:true, text, cls:"fog", lore: j.lore||null};
-}
-
-// The engine's validator: a proposed new place must respect the rules before it is added.
-function validateNewPlace(prop){
-  // prop: {id, name, desc, dirBack} — dirBack is the exit key from the new node back to current
-  if(!prop || !prop.id || !prop.name) return { ok:false, why:"incomplete proposal" };
-  if(WORLD.nodes[prop.id]) return { ok:false, why:"a place by that name already exists" };
-  // rule: no leaving the island until the craft is built/launched
-  const low = (prop.desc||"").toLowerCase() + " " + (prop.name||"").toLowerCase();
-  if(/mainland|another island|open ocean|escape the island|distant shore|continent/.test(low)
-     && !S.flags.craftBuilt){
-    return { ok:false, why:"the rules forbid leaving the island until the craft is built and launched" };
-  }
-  // rule: ecology self-consistency — reject obviously cold/volcanic/impossible descriptors
-  if(/volcanic|glacier|polar|tundra|permafrost|ice sheet|snow/.test(low)){
-    return { ok:false, why:"that contradicts the equatorial island ecology" };
-  }
-  return { ok:true };
-}
-
-// Generate a new place adjacent to the current node, validated before adding.
-async function genPlace(query){
-  const sys = `You are expanding the map of York: The Wreck of the Meridian, a castaway on an equatorial island (reef, palms, mangroves). `+
-    `The player is at "${node().name}". Propose ONE new place the player could discover here, consistent with the rules. `+
-    `Return ONLY JSON: {"id":"snake_case_id","name":"Short Name","desc":"one sentence, equatorial island, no cold/volcanic life or magic","dirBack":"the exit key from the new place back to the current node (e.g. south)"}. `+
-    `Rules: ${SPEC.constraints.join(" ")} Do not propose leaving the island (no mainland/ocean escape) unless the craft is already built.`;
-  try{
-    const raw = await llmText(sys, query||"What is there to discover here?", 200);
-    if(!raw) return { ok:false, why:"LLM unavailable" };
-    const prop = extractJSON(cleanGeneration(raw));
-    if(!prop) return { ok:false, why:"could not parse the proposed place" };
-    // engine validates against the ruleset
-    const v = validateNewPlace(prop);
-    if(!v.ok) return v;
-    // add the node, linked back to current location
-    const dirBack = prop.dirBack || "back";
-    const exitKey = "discover_"+prop.id;
-    WORLD.nodes[prop.id] = { name:prop.name, desc:prop.desc||"", exits:{ [dirBack]: S.loc } };
-    WORLD.nodes[S.loc].exits[exitKey] = prop.id;
-    commitLore("place:"+prop.id, `${prop.name}: ${prop.desc||""}`, { id:"place_"+prop.id, tags:["place","generated"] });
-    return { ok:true, prop, exitKey };
-  }catch(e){ return { ok:false, why:"error" }; }
-}
-
-function flattenActions(parsed){
-  if(!parsed) return [];
-  if(Array.isArray(parsed.actions)){
-    const out=[];
-    for(const a of parsed.actions){
-      if(a && a.actions) out.push(...flattenActions(a));
-      else if(a) out.push(a);
-    }
-    return out;
-  }
-  return [parsed];
-}
-
-function normalizeParsed(a, fallbackSay){
-  let action = String(a.action||"look").toLowerCase();
-  let target = a.target||null;
-  // engine guard: salvage is wreck-cargo only; scavenging beach junk is take
-  if(action==="salvage" && target && !/^(tools|sailcloth|provisions|rifle|radio)$/i.test(String(target).trim())){
-    action = "take";
-  }
-  return {
-    action,
-    target,
-    item: a.item||null,
-    say: a.say||fallbackSay||null
-  };
-}
-
-async function runPendingGen(pending){
-  if(!pending || S.ended) return;
-  if(pending.type==="lore"){
-    setThinking(true, "the voice weaves the world…");
-    const out = await genLore(pending.query);
-    setThinking(false);
-    if(out && (out.answer || (out.entities && out.entities.length) || (out.facts && out.facts.length))){
-      if(out.answer){
-        pushLog(out.answer, "llm");
-        commitLore("gen:"+(LORE.seq+1), out.answer, {tags:["generated","lore"], text:out.answer});
-      }
-      for(const f of (out.facts||[])){
-        if(!f || validateFactClient(f)) continue;
-        commitLore("gen:"+(LORE.seq+1), f, {tags:["generated","lore"], text:f});
-      }
-      applyEntities(out.entities);
-      bridgeLoreToItems([out.answer].concat(out.facts||[]));
-      saveState();
-    } else {
-      pushLog("The gray offers no answer you can trust.","sys");
-      toast("Lore generation failed or empty.","warn");
-    }
-  } else if(pending.type==="emerge"){
-    setThinking(true, "the voice weighs the act…");
-    const out = await genEmergent(pending.query);
-    setThinking(false);
-    pushLog(out.text, out.cls||"fog");
-    if(out.lore) commitLore("emerge:"+(S.log.length), out.lore);
-  } else if(pending.type==="place"){
-    setThinking(true, "the voice charts new ground…");
-    const gp = await genPlace(pending.query);
-    setThinking(false);
-    if(gp.ok){
-      pushLog(`You uncover ${gp.prop.name}. ${gp.prop.desc||""} (go: ${gp.exitKey})`, "llm");
-    } else {
-      pushLog("You find nothing new — or the rules forbid it: "+gp.why+".", "warn");
-    }
-  }
-}
-
-/* ---- the public turn: NL -> parse -> validate -> apply -> narrate ---- */
 let llmUnreachableWarned = false;
-async function playerTurn(text){
-  if(S.ended) return;
-  pushLog("> "+text, "you");
+async function playerTurn(text) {
+  if (game.isOver()) return;
+  game.appendLog("> " + text, "you");
   setThinking(true, "the voice stirs…");
   const llmResult = await callLLM(text);
   setThinking(false);
@@ -1149,154 +205,203 @@ async function playerTurn(text){
   const status = llmResult.status;
   let usedLLM = !!(parsed && (parsed.action || parsed.actions));
 
-  // Questions: offline ask is more reliable for topic routing
   const isQuestion = text.trim().endsWith("?") || /^(what|where|how|why|who|is there|can i|do i|did i|should i|would i|could i)\b/i.test(text.trim());
-  if(isQuestion){ parsed = offlineParse(text); usedLLM = false; }
-  else if(!usedLLM){ parsed = offlineParse(text); }
+  if (isQuestion) { parsed = offlineParse(text); usedLLM = false; }
+  else if (!usedLLM) { parsed = offlineParse(text); }
 
-  if(status==="unreachable"){
-    if(!llmUnreachableWarned){
+  if (status === "unreachable") {
+    if (!llmUnreachableWarned) {
       llmUnreachableWarned = true;
-      toast("Cannot reach /api/llm — offline parse in use.","err");
-      pushLog("The voice cannot reach you. The island answers in its own terse way.","warn");
+      toast("Cannot reach /api/llm — offline parse in use.", "err");
+      game.appendLog("The voice cannot reach you. The island answers in its own terse way.", "warn");
     }
-  } else if(status==="rate_limit"){
-    toast("Voice rate-limited (429). Offline parse used.","warn");
-  } else if(status==="server_error"){
-    toast("Voice server error ("+(llmResult.code||"?")+"). Offline parse used.","err");
-  } else if(status==="empty" && !usedLLM){
-    toast("Voice returned empty — using offline parse.","warn");
+  } else if (status === "rate_limit") {
+    toast("Voice rate-limited (429). Offline parse used.", "warn");
+  } else if (status === "server_error") {
+    toast("Voice server error (" + (llmResult.code || "?") + "). Offline parse used.", "err");
+  } else if (status === "empty" && !usedLLM) {
+    toast("Voice returned empty — using offline parse.", "warn");
   }
 
-  let steps = flattenActions(parsed).map(a=>normalizeParsed(a, text));
-  if(!steps.length) steps = [normalizeParsed({action:"look"}, text)];
+  let steps = flattenActions(parsed).map(a => normalizeParsed(a, text));
+  if (!steps.length) steps = [normalizeParsed({ action: "look" }, text)];
 
-  for(let i=0; i<steps.length && !S.ended; i++){
+  for (let i = 0; i < steps.length && !game.isOver(); i++) {
     const step = steps[i];
-    const res = applyAction(step);
-    if(usedLLM) pushLog("(the voice interprets → "+step.action+(step.target?(" "+step.target):"")+")","llm");
-    pushLog(res.text, res.cls||"sys");
-    if(res.async && res.run){ await res.run(); }
-    if(res.lore) commitLore("turn:"+(S.log.length), res.lore);
-    if(res.pendingGen) await runPendingGen(res.pendingGen);
+    const res = game.act(step);
+    if (usedLLM) game.appendLog("(the voice interprets → " + step.action + (step.target ? (" " + step.target) : "") + ")", "llm");
+    game.appendLog(res.text, res.cls || "sys");
+    if (res.pendingGen) {
+      setThinking(true, "the voice weaves the world…");
+      const g = await game.genStep(res.pendingGen);
+      setThinking(false);
+      if (g && g.verdict === "accepted" && g.type === "place" && g.place) {
+        /* genStep already logged place uncover */
+      } else if (g && (g.verdict === "rejected" || g.verdict === "unavailable") && g.type === "place") {
+        game.appendLog("You find nothing new — or the rules forbid it: " + (g.why || g.verdict) + ".", "warn");
+      } else if (g && g.verdict === "unavailable" && g.type === "lore") {
+        game.appendLog("The gray offers no answer you can trust.", "sys");
+        toast("Lore generation failed or empty.", "warn");
+      }
+      // push shared lore after gen commits
+      pushLore();
+    }
+    if (game.isOver()) showEndFromGame();
   }
 
-  if(!S.ended) render();
+  if (!game.isOver()) render();
 }
 
-/* ============================================================
-   UI
-   ============================================================ */
-// Responsive meter: label + CSS bar that flexes with layout width
-function asciiMeter(label, v, max){
-  const pct = Math.max(0, Math.min(100, (v/max)*100));
-  return `<div class="meter" title="${label.toUpperCase()} ${Math.round(v)}/${max}">`+
-    `<span class="meter-label">${label.toUpperCase()}</span>`+
-    `<div class="meter-track"><div class="meter-fill" style="width:${pct}%"></div></div>`+
-    `<span class="meter-val">${Math.round(v)}</span>`+
+function asciiMeter(label, v, max) {
+  const pct = Math.max(0, Math.min(100, (v / max) * 100));
+  return `<div class="meter" title="${label.toUpperCase()} ${Math.round(v)}/${max}">` +
+    `<span class="meter-label">${label.toUpperCase()}</span>` +
+    `<div class="meter-track"><div class="meter-fill" style="width:${pct}%"></div></div>` +
+    `<span class="meter-val">${Math.round(v)}</span>` +
   `</div>`;
 }
-// Visible "the voice is thinking" indicator during LLM calls.
-function setThinking(on, msg){
+
+function setThinking(on, msg) {
   const el = document.getElementById("thinking");
-  if(!el) return;
-  if(on){
-    el.innerHTML = (msg||"the voice stirs") + ' <span class="dot">.</span><span class="dot">.</span><span class="dot">.</span>';
+  if (!el) return;
+  if (on) {
+    el.innerHTML = (msg || "the voice stirs") + ' <span class="dot">.</span><span class="dot">.</span><span class="dot">.</span>';
     el.style.display = "block";
   } else {
     el.style.display = "none";
     el.innerHTML = "";
   }
 }
-function render(){
-  document.getElementById("meters").innerHTML =
-    asciiMeter("life",S.life,100)+
-    asciiMeter("wreck",S.wreck,100)+
-    asciiMeter("signal",S.signal,10)+
-    asciiMeter("warmth",S.warmth,100)+
-    asciiMeter("clock",S.clock,WORLD.maxClock);
 
-  const n=node();
-  if(S.ended){
+function render() {
+  const m = game.metrics();
+  const obs = game.observe("privileged");
+  if (!m) return;
+  document.getElementById("meters").innerHTML =
+    asciiMeter("life", m.life, 100) +
+    asciiMeter("wreck", m.wreck, 100) +
+    asciiMeter("signal", m.signal, 10) +
+    asciiMeter("warmth", m.warmth, 100) +
+    asciiMeter("clock", m.clock, obs.meters.maxClock);
+
+  if (game.isOver()) {
     document.getElementById("scene").textContent = "—";
   } else {
-    const exits = Object.keys(n.exits||{});
-    let txt = `— ${n.name} —\n${n.desc}`;
-    if(exits.length) txt += `\n\nPaths: ${exits.join(", ")}.`;
+    let txt = `— ${obs.place} —\n${obs.desc}`;
+    if (obs.exits.length) txt += `\n\nPaths: ${obs.exits.join(", ")}.`;
     document.getElementById("scene").textContent = txt;
   }
 
-  const inv = S.inv.length ? S.inv.map(itemName).join(", ") : "";
+  const inv = obs.inventory.length ? obs.inventory.join(", ") : "";
   document.getElementById("inv").innerHTML = inv
     ? `<b>${inv}</b>`
     : `<span class="empty">empty</span>`;
 
-  const lg=document.getElementById("log");
-  // newest first: latest messages at top, older scroll off the bottom
-  lg.innerHTML = S.log.slice(-80).reverse().map(e=>`<div class="e ${e.c}">${e.t}</div>`).join("");
+  const lg = document.getElementById("log");
+  const fullLog = (game.exportState().S && game.exportState().S.log) || obs.log;
+  lg.innerHTML = fullLog.slice(-80).reverse().map(e => `<div class="e ${e.c}">${e.t}</div>`).join("");
   lg.scrollTop = 0;
   renderJournal();
 }
 
-// Sidebar "Your Journal": the player's own discoveries (not the world-seeded
-// baseline). Click a node to expand its full text and the facts it links to.
-function renderJournal(){
+function renderJournal() {
   const j = document.getElementById("journal");
-  if(!LORE){ j.innerHTML=""; return; }
-  const mine = Object.values(LORE.nodes).filter(n=> n.source==="play" || n.source==="generated");
-  if(!mine.length){ j.innerHTML = `<div class="jempty">No discoveries yet. Explore, examine, and ask — what you learn is recorded here.</div>`; return; }
-  // newest first
-  mine.sort((a,b)=> (b.turn||0)-(a.turn||0));
-  j.innerHTML = mine.map(n=>{
-    const links = LORE.edges.filter(e=>e.from===n.id).map(e=>LORE.nodes[e.to]).filter(Boolean);
-    const linkTxt = links.length? `<div class="jlinks">linked: ${links.map(l=>l.text).join(" · ")}</div>` : "";
-    const tag = (n.tags&&n.tags[0])||n.source;
-    return `<div class="jnode" data-id="${n.id}">`+
-      `<span class="jtag">${tag}</span>`+
-      `<div class="jt">${escapeHtml(n.text)}</div>`+
-      `<div class="jdetail">${escapeHtml(n.text)}${linkTxt}</div>`+
+  const mine = game.journalNodes();
+  if (!mine.length) {
+    j.innerHTML = `<div class="jempty">No discoveries yet. Explore, examine, and ask — what you learn is recorded here.</div>`;
+    return;
+  }
+  mine.sort((a, b) => (b.turn || 0) - (a.turn || 0));
+  j.innerHTML = mine.map(n => {
+    const links = game.journalLinks(n.id);
+    const linkTxt = links.length ? `<div class="jlinks">linked: ${links.map(l => l.text).join(" · ")}</div>` : "";
+    const tag = (n.tags && n.tags[0]) || n.source;
+    return `<div class="jnode" data-id="${n.id}">` +
+      `<span class="jtag">${tag}</span>` +
+      `<div class="jt">${escapeHtml(n.text)}</div>` +
+      `<div class="jdetail">${escapeHtml(n.text)}${linkTxt}</div>` +
     `</div>`;
   }).join("");
-  for(const el of j.querySelectorAll(".jnode")){
-    el.onclick = ()=> el.classList.toggle("open");
+  for (const el of j.querySelectorAll(".jnode")) {
+    el.onclick = () => el.classList.toggle("open");
   }
 }
-function escapeHtml(s){ return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
-function showEnd(title,body,cls){
-  document.getElementById("endTitle").textContent=title;
-  document.getElementById("endTitle").style.color = cls==="bad"?"var(--bad)":"var(--good)";
-  document.getElementById("endBody").textContent=body;
-  document.getElementById("endModal").style.display="flex";
-  autoContribute(); // share this session's discoveries with the wider world
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 }
 
-function runCmd(text){
-  if(S.ended) return;
-  const input=document.getElementById("cmd");
-  input.value="";
-  document.getElementById("go").disabled=true;
-  playerTurn(text).finally(()=>{ document.getElementById("go").disabled=false; input.focus(); });
+const ENDING_TITLES = {
+  rescue_ship: ["A SAIL ON THE HORIZON", "good"],
+  raft_escape: ["THE OPEN OCEAN", "good"],
+  balloon: ["INTO THE CLOUDS", "bittersweet"],
+  endure: ["THE ISLAND IS HOME", "bittersweet"],
+  perish: ["THE SEA KEEPS YOU", "bad"]
+};
+
+function showEndFromGame() {
+  const kind = game.ending();
+  const meta = ENDING_TITLES[kind] || ["THE WATCH ENDS", "sys"];
+  const st = game.exportState();
+  const last = (st.S && st.S.log && st.S.log.length) ? st.S.log[st.S.log.length - 1].t : "";
+  document.getElementById("endTitle").textContent = meta[0];
+  document.getElementById("endTitle").style.color = meta[1] === "bad" ? "var(--bad)" : "var(--good)";
+  document.getElementById("endBody").textContent = last;
+  document.getElementById("endModal").style.display = "flex";
+  autoContribute();
 }
 
-document.getElementById("go").onclick=()=>{ const v=document.getElementById("cmd").value.trim(); if(v) runCmd(v); };
-document.getElementById("cmd").addEventListener("keydown",e=>{ if(e.key==="Enter"){ const v=e.target.value.trim(); if(v) runCmd(v); } });
-document.getElementById("copyChat").onclick=copyChat;
-document.getElementById("endAgain").onclick=()=>{ document.getElementById("endModal").style.display="none"; newGame(true); };
-document.addEventListener("keydown",e=>{ if((e.key==="r"||e.key==="R") && !/input|textarea/i.test(e.target.tagName)){ document.getElementById("endModal").style.display="none"; newGame(true); } });
-
-function copyChat(){
-  // Newest first — matches on-screen order
-  const lines = S.log.slice().reverse().map(e=>e.t).join("\n");
-  navigator.clipboard.writeText(lines).then(()=>{
-    toast("Chat copied.","ok");
-  }).catch(()=>{
-    toast("Copy failed.","err");
+function runCmd(text) {
+  if (game.isOver()) return;
+  const input = document.getElementById("cmd");
+  input.value = "";
+  document.getElementById("go").disabled = true;
+  playerTurn(text).finally(() => {
+    document.getElementById("go").disabled = false;
+    input.focus();
   });
 }
 
-// optional API base override (e.g. a deployed Vercel URL): set window.YORK_API_BASE first.
-// newGame (with shared-memory bootstrap) is called inside the IIFE below so API_BASE is set.
-(function(){ newGame(); })();
+document.getElementById("go").onclick = () => {
+  const v = document.getElementById("cmd").value.trim();
+  if (v) runCmd(v);
+};
+document.getElementById("cmd").addEventListener("keydown", e => {
+  if (e.key === "Enter") {
+    const v = e.target.value.trim();
+    if (v) runCmd(v);
+  }
+});
+document.getElementById("copyChat").onclick = copyChat;
+document.getElementById("endAgain").onclick = () => {
+  document.getElementById("endModal").style.display = "none";
+  boot(true);
+};
+document.addEventListener("keydown", e => {
+  if ((e.key === "r" || e.key === "R") && !/input|textarea/i.test(e.target.tagName)) {
+    document.getElementById("endModal").style.display = "none";
+    boot(true);
+  }
+});
+
+function copyChat() {
+  const fullLog = (game.exportState().S && game.exportState().S.log) || [];
+  const lines = fullLog.slice().reverse().map(e => e.t).join("\n");
+  navigator.clipboard.writeText(lines).then(() => toast("Chat copied.", "ok")).catch(() => toast("Copy failed.", "err"));
+}
+
+function boot(fresh) {
+  game.reset({ fresh: !!fresh });
+  pullLore().then(r => {
+    if (r.ok && r.added > 0) {
+      game.appendLog(`The wider world remembers ${r.added} thing(s) others learned here.`, "fog");
+      render();
+    }
+  });
+  render();
+}
+
+boot(false);
 </script>
 </body>
 </html>
