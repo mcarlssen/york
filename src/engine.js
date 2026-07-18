@@ -22,9 +22,15 @@ function defaultStorage() {
 
 let _storage = defaultStorage();
 let _llm = null;
+let _onDebug = null;
 let _arm = "full";
 let _harvest = [];
 let _loreStats = { retrieved: 0, generated: 0, entitiesAdded: 0, placesAdded: 0 };
+
+function debugEvent(msg){
+  if(!_onDebug) return;
+  try{ _onDebug(String(msg)); }catch(e){}
+}
 
 /* ============================================================
    WORLD DOC — the single source of truth for this world.
@@ -267,6 +273,7 @@ function registerItem(id, name, desc, tags, opts){
   opts = opts || {};
   if(!WORLD.items[id]){
     WORLD.items[id] = { name, desc, tags: tags||[], portable: opts.portable!==false };
+    debugEvent("item: register "+id);
   }
   return WORLD.items[id];
 }
@@ -284,10 +291,11 @@ function applyEntities(entities, playerQuery){
     registerItem(id, e.name, e.desc||("You notice "+e.name+" here."), ["generated","lore"], {portable});
     if(!portable) continue;
     if(shouldHoldEntity(e, playerQuery)){
-      if(!hasItem(id)) S.inv.push(id);
+      if(!hasItem(id)){ S.inv.push(id); debugEvent("inv: +"+id); }
       const ix = n.items.indexOf(id); if(ix>=0) n.items.splice(ix,1);
     } else if(!n.items.includes(id) && !hasItem(id)){
       n.items.push(id);
+      debugEvent("place-item: +"+id+" @ "+S.loc);
     }
   }
 }
@@ -453,6 +461,7 @@ function doTake(t){
   const it=matchItem((n.items||[]), raw);
   if(!it) return {ok:false, text:`There is no ${normalizeItemTarget(raw)||raw} here to take.`, cls:"warn"};
   S.inv.push(it); tick(); ageWreck(1);
+  debugEvent("inv: +"+it);
   return {ok:true, text:`You take the ${itemName(it)}.`, cls:"good"};
 }
 
@@ -466,6 +475,7 @@ function doSalvage(t){
   if(!key) return {ok:false, text:"Salvage what? (tools, sailcloth, provisions, rifle, radio)", cls:"warn"};
   if(S.salvaged[key]) return {ok:false, text:`You already stripped the ${key} from the wreck.`, cls:"warn"};
   S.inv.push(key); S.salvaged[key]=true; tick(); ageWreck(3);
+  debugEvent("inv: +"+key);
   let txt = `You wrest ${holds[key]} from the dying hull.`;
   if(key==="radio") txt += " The wireless is sealed in oilskin — it might still work.";
   if(S.wreck<=0) txt += " Even as you climb clear, the Meridian comes apart behind you.";
@@ -639,9 +649,11 @@ function commitLore(key, fact, opts){
   opts = opts || {};
   // Use the key as the stable ID to prevent duplicates and overwrites
   const stableId = opts.id || key || ("T"+(LORE.seq+1));
+  const text = opts.text || fact;
   LORE.commit(key, "is", fact, { source:"play", tags: opts.tags||["discovered"], turn: S.clock,
-    id: stableId, text: opts.text || fact });
+    id: stableId, text });
   persistLore();
+  debugEvent("lore: commit "+stableId+" — "+String(text).slice(0,120));
 }
 
 function endGame(kind){
@@ -874,7 +886,7 @@ function applyImproviseResult(out){
   const id = String(out.result.id).toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"");
   if(!id) return false;
   registerItem(id, out.result.name||id, out.result.desc||("You fashioned "+(out.result.name||id)+"."), ["generated","improvised"], {portable:true});
-  if(!hasItem(id)) S.inv.push(id);
+  if(!hasItem(id)){ S.inv.push(id); debugEvent("inv: +"+id); }
   const n = node();
   if(n.items){ const ix = n.items.indexOf(id); if(ix>=0) n.items.splice(ix,1); }
   for(const cid of (out.consume||[])){
@@ -968,6 +980,7 @@ export function createGame(opts = {}) {
   _storage = opts.storage || defaultStorage();
   _arm = opts.arm || "full";
   _llm = opts.llm || null;
+  _onDebug = typeof opts.onDebug === "function" ? opts.onDebug : null;
   _harvest = [];
   _loreStats = { retrieved: 0, generated: 0, entitiesAdded: 0, placesAdded: 0 };
 
@@ -1063,6 +1076,7 @@ export function createGame(opts = {}) {
   function act(action) {
     if (!S || S.ended) return { ok: false, text: "The watch is over.", ended: true };
     const step = normalizeParsed(action, action && action.say);
+    debugEvent("act: " + step.action + (step.target ? (" " + step.target) : ""));
     const res = applyAction(step);
     if (res.lore) commitLore("turn:" + (S.log.length), res.lore);
     if (S.ended) res.ended = true;
@@ -1082,6 +1096,7 @@ export function createGame(opts = {}) {
     }
 
     if (pending.type === "lore") {
+      debugEvent("gen: lore — " + String(pending.query || "").slice(0, 80));
       const out = await genLore(pending.query);
       if (!out || !(out.answer || (out.entities && out.entities.length) || (out.facts && out.facts.length) || (out.playerFacts && out.playerFacts.length))) {
         return { kind: "gen", type: "lore", ok: false, verdict: "unavailable", why: "empty" };
@@ -1115,6 +1130,7 @@ export function createGame(opts = {}) {
     }
 
     if (pending.type === "emerge") {
+      debugEvent("gen: emerge — " + String(pending.query || "").slice(0, 80));
       const out = await genEmergent(pending.query);
       pushLog(out.text, out.cls || "fog");
       if (out.lore) {
@@ -1128,6 +1144,7 @@ export function createGame(opts = {}) {
     }
 
     if (pending.type === "improvise") {
+      debugEvent("gen: improvise — " + String(pending.query || "").slice(0, 80));
       const out = await genImprovise(pending.query);
       const answer = (out && out.answer) || (out && out.ok ? "You finish the work." : "Nothing comes of it.");
       pushLog(answer, out && out.ok ? "llm" : "warn");
@@ -1153,9 +1170,11 @@ export function createGame(opts = {}) {
     }
 
     if (pending.type === "place") {
+      debugEvent("gen: place — " + String(pending.query || "").slice(0, 80));
       const gp = await genPlace(pending.query);
       if (gp.ok) {
         pushLog(`You uncover ${gp.prop.name}. ${gp.prop.desc || ""} (go: ${gp.exitKey})`, "llm");
+        debugEvent("place: uncovered " + gp.prop.id);
         _loreStats.placesAdded++;
         _harvest.push({
           kind: "place", text: `${gp.prop.name}: ${gp.prop.desc || ""}`,
@@ -1232,6 +1251,17 @@ export function createGame(opts = {}) {
     return added;
   }
   function appendLog(t, cls) { pushLog(t, cls); }
+  function patchLastLog(cls, patch) {
+    if (!S || !S.log || !S.log.length) return false;
+    for (let i = S.log.length - 1; i >= 0; i--) {
+      if (S.log[i].c === cls) {
+        Object.assign(S.log[i], patch || {});
+        saveState();
+        return true;
+      }
+    }
+    return false;
+  }
   function parseContext(text) {
     const n = node();
     const ctx = (text || "") + " " + n.name + " " + (S.inv.map(itemName).join(" "));
@@ -1269,6 +1299,6 @@ export function createGame(opts = {}) {
     apiVersion: AGENT_API_VERSION,
     reset, observe, act, genStep,
     isOver, ending, metrics, loreStats, dumpHarvest, exportState,
-    listContributions, mergeShared, appendLog, parseContext, journalNodes, journalLinks,
+    listContributions, mergeShared, appendLog, patchLastLog, parseContext, journalNodes, journalLinks,
   };
 }
