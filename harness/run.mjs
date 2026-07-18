@@ -1,7 +1,11 @@
 import { mkdirSync, writeFileSync, readFileSync, existsSync } from "node:fs";
 import { dirname, join, isAbsolute } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { createGame } from "../src/engine.js";
+import { loadConfig } from "./config.mjs";
+import { createLlmClient } from "./llm.mjs";
+import { createDecideAction } from "./player.mjs";
+import { decideOffline } from "./player-offline.mjs";
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -132,9 +136,79 @@ export async function runGame({
     genCalls,
     genRejections,
     genSkipped,
+    harvest: game.dumpHarvest(),
     harvestRef: null,
     selfReport: null,
   };
   persistRun(resolveRecordDir(config.RECORD_DIR), run);
   return run;
+}
+
+function parseCliArgs(argv) {
+  const out = { arm: "spine", observe: null, baseline: null };
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--arm" && argv[i + 1]) out.arm = argv[++i];
+    else if (a === "--observe" && argv[i + 1]) out.observe = argv[++i];
+    else if (a === "--baseline" && argv[i + 1]) out.baseline = argv[++i];
+  }
+  return out;
+}
+
+export async function main(argv = process.argv.slice(2)) {
+  const args = parseCliArgs(argv);
+  const arm = args.arm || "spine";
+  const observeMode =
+    args.observe || (arm === "blind" ? "blind" : "privileged");
+  const baseline =
+    args.baseline || (arm === "spine" ? "offline" : "llm");
+  const config = loadConfig();
+
+  let decideAction;
+  let llmClient = null;
+  if (baseline === "offline") {
+    decideAction = decideOffline;
+  } else {
+    llmClient = createLlmClient(config);
+    decideAction = createDecideAction(llmClient, {
+      ...config,
+      arm,
+      observeMode,
+    });
+  }
+
+  const run = await runGame({
+    arm,
+    observeMode,
+    config,
+    decideAction,
+    llmClient,
+  });
+  console.log(
+    JSON.stringify(
+      {
+        id: run.id,
+        arm: run.arm,
+        observeMode: run.observeMode,
+        ending: run.ending,
+        turns: run.turns,
+        genCalls: run.genCalls,
+        promptVersion: run.promptVersion,
+      },
+      null,
+      2
+    )
+  );
+  return run;
+}
+
+const isCli =
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(process.argv[1]).href;
+
+if (isCli) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
 }
