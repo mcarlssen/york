@@ -1,7 +1,10 @@
 # York Play-Test Harness — Design & Spec
 
+> **SUPERSEDED** by [2026-07-17-playtest-harness-design.md](./2026-07-17-playtest-harness-design.md).
+> Kept for history. Do not implement from this document.
+
 **Date:** 2026-07-15
-**Status:** Approved design → implementation plan pending
+**Status:** Superseded (2026-07-17)
 **Scope:** A headless harness that drives the Meridian engine with an LLM "player,"
 records full run trajectories, and produces a feedback report across five signal
 classes — balance/outcomes, mechanic comprehension, broken-path detection, fun/narrative,
