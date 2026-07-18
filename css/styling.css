@@ -33,6 +33,14 @@ h1{color:var(--fog);font-size:18px;margin:0;letter-spacing:2px;text-shadow:0 0 8
 #log .sys{border-color:var(--dim);color:var(--dim)}
 #log .llm{border-color:var(--key);color:#d9c2ff}
 #log .you{border-color:#2a4a3a;color:#bfeed4}
+#log .dbg{margin:2px 0 10px 10px;padding:6px 8px;border:1px solid var(--line);border-radius:4px;background:#08130d;color:var(--dim);font-size:11px;line-height:1.4}
+#log .dbg summary{cursor:pointer;color:var(--fog);list-style:none}
+#log .dbg summary::-webkit-details-marker{display:none}
+#log .dbg summary::before{content:"▸ ";color:var(--dim)}
+#log .dbg[open] summary::before{content:"▾ "}
+#log .dbg-http{margin-top:6px;white-space:pre-wrap;word-break:break-word}
+#log .dbg-http pre{margin:4px 0 0;padding:6px;background:#06100c;border:1px solid var(--line);border-radius:3px;max-height:180px;overflow:auto;white-space:pre-wrap;word-break:break-word;color:#9bb7ff}
+#log .dbg-ev{margin-top:2px}
 .jsub{color:var(--dim);font-size:11px}
 #journal{font-size:12.5px}
 .jempty{color:var(--dim);font-style:italic;padding:8px 0}

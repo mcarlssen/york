@@ -34,6 +34,9 @@
         <a id="adminLink" class="icon-btn" href="admin.html" title="Lore curation dashboard" aria-label="Lore curation dashboard">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" aria-hidden="true"><path d="M385.2 201.9C387.7 195.9 393.5 192 400 192L440 192L440 168C440 154.7 429.3 144 416 144L318 144C319.3 149.1 320 154.5 320 160L320 224C320 259.3 291.3 288 256 288L160 288C124.7 288 96 259.3 96 224L96 160C96 124.7 124.7 96 160 96L416 96C455.8 96 488 128.2 488 168L488 192L528 192C534.5 192 540.3 195.9 542.8 201.9C545.3 207.9 543.9 214.8 539.3 219.3L475.3 283.3C469.1 289.5 458.9 289.5 452.7 283.3L388.7 219.3C384.1 214.7 382.8 207.8 385.2 201.9zM480 416L160 416L160 480L480 480L480 416zM544 480C544 515.3 515.3 544 480 544L160 544C124.7 544 96 515.3 96 480L96 416C96 380.7 124.7 352 160 352L480 352C515.3 352 544 380.7 544 416L544 480z"/></svg>
         </a>
+        <label class="debug-toggle" title="Show per-turn engine debug under each command">
+          <input type="checkbox" id="debugToggle" /> Debug
+        </label>
       </div>
       <div id="thinking" class="thinking" style="display:none"></div>
       <div id="log"></div>
@@ -92,24 +95,66 @@ function validateFactClient(text) {
 
 const API_BASE = (typeof window !== "undefined" && window.YORK_API_BASE) || "/api";
 const WORLD_ID = "meridian";
+const DEBUG_KEY = "york_debug_v1";
+
+let turnDebug = null;
+let debugMode = false;
+try { debugMode = localStorage.getItem(DEBUG_KEY) === "1"; } catch (e) {}
+
+function dbgEvent(msg) {
+  if (turnDebug) turnDebug.events.push(String(msg));
+}
+
+async function callLLMProxy(system, user, maxTokens) {
+  async function once() {
+    let r;
+    try {
+      r = await fetch(API_BASE + "/llm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ system, user, maxTokens: maxTokens || 200 })
+      });
+    } catch (e) {
+      return { content: null, status: "unreachable", code: 0 };
+    }
+    if (r.status === 429) return { content: null, status: "rate_limit", code: 429 };
+    if (r.status >= 500) return { content: null, status: "server_error", code: r.status };
+    if (!r.ok) return { content: null, status: "server_error", code: r.status };
+    const d = await r.json().catch(() => ({}));
+    const c = (d && d.content) || null;
+    return { content: c, status: c ? "ok" : "empty", code: r.status };
+  }
+  let out = await once();
+  if (out.status === "rate_limit") {
+    await new Promise(r => setTimeout(r, 1200));
+    out = await once();
+  }
+  if (turnDebug) {
+    turnDebug.http.push({
+      route: "/api/llm",
+      status: out.status,
+      code: out.code,
+      content: out.content
+    });
+  }
+  return out;
+}
 
 const game = createGame({
   llm: async (system, user, maxTokens) => {
-    const r = await fetch(API_BASE + "/llm", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ system, user, maxTokens: maxTokens || 200 })
-    });
-    if (!r.ok) return null;
-    const d = await r.json().catch(() => ({}));
-    return d.content || null;
-  }
+    const out = await callLLMProxy(system, user, maxTokens);
+    return out.content;
+  },
+  onDebug: (msg) => dbgEvent(msg)
 });
 
 /* ---- shared-lore network (stays in thin view) ---- */
 async function pushLore() {
   const nodes = game.listContributions();
-  if (!nodes.length) return { ok: true, pushed: 0, skipped: 0, note: "nothing new to share" };
+  if (!nodes.length) {
+    dbgEvent("lore: push skipped (nothing new)");
+    return { ok: true, pushed: 0, skipped: 0, note: "nothing new to share" };
+  }
   let pushed = 0, skipped = 0;
   const clean = nodes.filter(n => {
     const why = validateFactClient(n.text);
@@ -123,10 +168,15 @@ async function pushLore() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ world: WORLD_ID, nodes: clean })
     });
-    if (!r.ok) return { ok: false, pushed: 0, skipped, why: "server rejected (" + r.status + ")" };
+    if (!r.ok) {
+      dbgEvent("lore: push failed HTTP " + r.status);
+      return { ok: false, pushed: 0, skipped, why: "server rejected (" + r.status + ")" };
+    }
     const d = await r.json().catch(() => ({}));
+    dbgEvent("lore: push ok merged=" + (d.merged != null ? d.merged : pushed) + (skipped ? (" skipped=" + skipped) : ""));
     return { ok: true, pushed, skipped, merged: d.merged || pushed, note: d.note || "" };
   } catch (e) {
+    dbgEvent("lore: push unreachable");
     return { ok: false, pushed: 0, skipped, why: "network error (offline floor intact)" };
   }
 }
@@ -164,33 +214,6 @@ function toast(msg, kind) {
   setTimeout(() => el.remove(), 4200);
 }
 
-async function callLLMProxy(system, user, maxTokens) {
-  async function once() {
-    let r;
-    try {
-      r = await fetch(API_BASE + "/llm", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ system, user, maxTokens: maxTokens || 200 })
-      });
-    } catch (e) {
-      return { content: null, status: "unreachable", code: 0 };
-    }
-    if (r.status === 429) return { content: null, status: "rate_limit", code: 429 };
-    if (r.status >= 500) return { content: null, status: "server_error", code: r.status };
-    if (!r.ok) return { content: null, status: "server_error", code: r.status };
-    const d = await r.json().catch(() => ({}));
-    const c = (d && d.content) || null;
-    return { content: c, status: c ? "ok" : "empty", code: r.status };
-  }
-  let out = await once();
-  if (out.status === "rate_limit") {
-    await new Promise(r => setTimeout(r, 1200));
-    out = await once();
-  }
-  return out;
-}
-
 async function callLLM(text) {
   const ctx = game.parseContext(text);
   const sys = `You convert player commands into JSON for a castaway text adventure.
@@ -220,7 +243,9 @@ Priority:
 let llmUnreachableWarned = false;
 async function playerTurn(text) {
   if (game.isOver()) return;
+  turnDebug = { at: new Date().toISOString(), http: [], events: [] };
   game.appendLog("> " + text, "you");
+  game.patchLastLog("you", { debug: turnDebug });
   setThinking(true, "the voice stirs…");
   const llmResult = await callLLM(text);
   setThinking(false);
@@ -249,6 +274,9 @@ async function playerTurn(text) {
   let steps = flattenActions(parsed).map(a => ({ ...a, say: a.say || text }));
   if (!steps.length) steps = [{ action: "look", say: text }];
 
+  const stepSummary = steps.map(s => s.action + (s.target ? (" " + s.target) : "")).join(", ");
+  dbgEvent("parse: " + (usedLLM ? "llm" : "offline") + " [" + status + "] → " + stepSummary);
+
   for (let i = 0; i < steps.length && !game.isOver(); i++) {
     const step = steps[i];
     const res = game.act(step);
@@ -266,13 +294,15 @@ async function playerTurn(text) {
         game.appendLog("The gray offers no answer you can trust.", "sys");
         toast("Lore generation failed or empty.", "warn");
       }
-      pushLore();
+      await pushLore();
     } else if (res.lore) {
-      pushLore();
+      await pushLore();
     }
     if (game.isOver()) showEndFromGame();
   }
 
+  game.patchLastLog("you", { debug: turnDebug });
+  turnDebug = null;
   if (!game.isOver()) render();
 }
 
@@ -323,9 +353,34 @@ function render() {
 
   const lg = document.getElementById("log");
   const fullLog = (game.exportState().S && game.exportState().S.log) || obs.log;
-  lg.innerHTML = fullLog.slice(-80).reverse().map(e => `<div class="e ${e.c}">${e.t}</div>`).join("");
+  lg.innerHTML = fullLog.slice(-80).reverse().map(e => {
+    let html = `<div class="e ${e.c}">${escapeHtml(e.t)}</div>`;
+    if (debugMode && e.debug) html += formatDebugHtml(e.debug);
+    return html;
+  }).join("");
   lg.scrollTop = 0;
   renderJournal();
+}
+
+function formatDebugHtml(dbg) {
+  const http = (dbg.http || []).map(h => {
+    const body = h.content == null ? "(null)" : String(h.content);
+    return `<div class="dbg-http">HTTP ${escapeHtml(h.route || "/api/llm")} ${escapeHtml(String(h.code))} ${escapeHtml(h.status || "")}<pre>${escapeHtml(body)}</pre></div>`;
+  }).join("");
+  const ev = (dbg.events || []).map(x => `<div class="dbg-ev">· ${escapeHtml(x)}</div>`).join("");
+  return `<details class="dbg"><summary>debug · ${escapeHtml(dbg.at || "")}</summary>${http}${ev || '<div class="dbg-ev">· (no engine events)</div>'}</details>`;
+}
+
+function formatDebugText(dbg) {
+  const lines = ["--- debug · " + (dbg.at || "") + " ---"];
+  for (const h of (dbg.http || [])) {
+    lines.push("HTTP " + (h.route || "/api/llm") + " " + h.code + " " + (h.status || ""));
+    lines.push(h.content == null ? "(null)" : String(h.content));
+  }
+  for (const x of (dbg.events || [])) lines.push("· " + x);
+  if (!(dbg.events || []).length) lines.push("· (no engine events)");
+  lines.push("---");
+  return lines.join("\n");
 }
 
 function renderJournal() {
@@ -387,6 +442,12 @@ document.getElementById("cmd").addEventListener("keydown", e => {
   }
 });
 document.getElementById("copyChat").onclick = copyChat;
+document.getElementById("debugToggle").checked = debugMode;
+document.getElementById("debugToggle").addEventListener("change", e => {
+  debugMode = !!e.target.checked;
+  try { localStorage.setItem(DEBUG_KEY, debugMode ? "1" : "0"); } catch (err) {}
+  render();
+});
 document.getElementById("endAgain").onclick = () => {
   document.getElementById("endModal").style.display = "none";
   boot(true);
@@ -400,7 +461,11 @@ document.addEventListener("keydown", e => {
 
 function copyChat() {
   const fullLog = (game.exportState().S && game.exportState().S.log) || [];
-  const lines = fullLog.slice().reverse().map(e => e.t).join("\n");
+  const lines = fullLog.slice().reverse().map(e => {
+    let s = e.t;
+    if (debugMode && e.debug) s += "\n" + formatDebugText(e.debug);
+    return s;
+  }).join("\n");
   navigator.clipboard.writeText(lines).then(() => toast("Chat copied.", "ok")).catch(() => toast("Copy failed.", "err"));
 }
 
