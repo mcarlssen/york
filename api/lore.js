@@ -14,9 +14,9 @@
 // generation) so the OpenRouter key never ships to the client. The engine
 // falls back to its offline parser whenever the proxy returns no content.
 //
-// Storage: Upstash Redis when deployed (UPSTASH_REDIS_REST_URL/_TOKEN env).
-// Vercel KV was sunset; Redis/Upstash Redis is the supported store. Local dev
-// falls back to a JSON file so the logic is testable without a Redis binding.
+// Storage: Upstash Redis when deployed. Accepts UPSTASH_REDIS_REST_* or the Vercel
+// Marketplace aliases KV_REST_API_URL / KV_REST_API_TOKEN. Local dev falls back to
+// a JSON file so the logic is testable without a Redis binding.
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { join, dirname } from "node:path";
@@ -124,14 +124,9 @@ async function validateNode(n, doc) {
   // never accept 'spec'/'shared' sources from a client — they are server-assigned
   if (n.source === "spec" || n.source === "shared" || n.source === "canonical")
     return "forbidden source label";
-  const tags = Array.isArray(n.tags) ? n.tags : [];
-  // player-state facts (clothing/held) are not world-ecology claims — skip semantic LLM
-  // (it false-rejects them); still run the keyword heuristic.
-  const playerState = tags.includes("player") || tags.includes("state");
-  if (!playerState) {
-    const sem = await semanticConflict(n.text, canonContext(doc));
-    if (sem && sem.conflict) return `contradicts the world's established canon (${sem.why})`;
-  }
+  // primary: semantic contradiction against the established world (incl. player-state)
+  const sem = await semanticConflict(n.text, canonContext(doc));
+  if (sem && sem.conflict) return `contradicts the world's established canon (${sem.why})`;
   // offline fallback: coarse keyword heuristic when no LLM is configured
   const bad = forbiddenTerms(doc).find(t => n.text.toLowerCase().includes(t));
   if (bad) return `contradicts the world's ecology/identity constraints ("${bad}")`;
@@ -168,23 +163,26 @@ async function callOpenRouter(system, user, maxTokens) {
     return { content: null, status: "server_error", code: 0 };
   }
 }
-// Vercel KV was sunset; Upstash Redis (or Redis) is the supported store. Set
-// UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN (the REST credentials from
-// your Upstash database) to enable persistence. Without them, the function falls
-// back to a local JSON file so the logic is testable in dev.
+// Storage: Upstash Redis when deployed. Accept either Upstash-native env names or the
+// Vercel Marketplace aliases (KV_REST_API_URL / KV_REST_API_TOKEN) that the integration
+// auto-provisions. Without them, fall back to a local JSON file for dev.
 const STORE_KEY = (world) => `york:lore:${world}`;
 const LOCAL_FILE = join(__dirname, "..", ".cache", "shared-lore.json");
+
+function redisRestCreds() {
+  const url = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL || "";
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN || "";
+  return url && token ? { url, token } : null;
+}
 
 let redis = null;
 async function getRedis() {
   if (redis !== null) return redis;
-  if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
+  const creds = redisRestCreds();
+  if (creds) {
     try {
       const mod = await import("@upstash/redis");
-      if (mod && mod.Redis) redis = new mod.Redis({
-        url: process.env.UPSTASH_REDIS_REST_URL,
-        token: process.env.UPSTASH_REDIS_REST_TOKEN,
-      });
+      if (mod && mod.Redis) redis = new mod.Redis(creds);
       else redis = false;
     } catch { redis = false; }
   } else {
@@ -255,7 +253,7 @@ export default async function handler(req, res) {
     return res.status(200).json({
       world, nodes: g.nodes, edges: g.edges || [], count: g.nodes.length, store,
       note: store === "ephemeral"
-        ? "No durable store configured (set UPSTASH_REDIS_REST_URL/_TOKEN). Writes will not persist on Vercel."
+        ? "No durable store configured (set KV_REST_API_URL/_TOKEN or UPSTASH_REDIS_REST_URL/_TOKEN). Writes will not persist on Vercel."
         : undefined,
     });
   }
@@ -295,7 +293,7 @@ export default async function handler(req, res) {
           return res.status(503).json({
             ok: false, merged: 0, rejected, rejections: rejections.slice(0, 20),
             why: "no_durable_store",
-            note: "Set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN — Vercel has no persistent filesystem.",
+            note: "Set KV_REST_API_URL + KV_REST_API_TOKEN (Vercel Upstash) or UPSTASH_REDIS_REST_* — Vercel has no persistent filesystem.",
           });
         }
         throw e;
