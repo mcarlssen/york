@@ -64,9 +64,28 @@
 <div id="toasts"></div>
 
 <script type="module">
-import {
-  createGame, offlineParse, flattenActions, normalizeParsed, extractJSON, validateFactClient
-} from "./src/engine.js";
+import { createGame, offlineParse, ENDINGS } from "./src/engine.js";
+import { extractJSON } from "./scripts/lib/world-memory.mjs";
+
+/* thin-view copies — engine keeps these non-exported */
+function flattenActions(parsed) {
+  if (!parsed) return [];
+  if (Array.isArray(parsed.actions)) {
+    const out = [];
+    for (const a of parsed.actions) {
+      if (a && a.actions) out.push(...flattenActions(a));
+      else if (a) out.push(a);
+    }
+    return out;
+  }
+  return [parsed];
+}
+function validateFactClient(text) {
+  const t = String(text || "").toLowerCase();
+  if (/volcanic|glacier|polar|tundra|permafrost|ice sheet|magic portal|dragon|unicorn|wizard|fairy/.test(t))
+    return "contradicts the world's ecology/identity constraints";
+  return null;
+}
 
 const API_BASE = (typeof window !== "undefined" && window.YORK_API_BASE) || "/api";
 const WORLD_ID = "meridian";
@@ -223,8 +242,8 @@ async function playerTurn(text) {
     toast("Voice returned empty — using offline parse.", "warn");
   }
 
-  let steps = flattenActions(parsed).map(a => normalizeParsed(a, text));
-  if (!steps.length) steps = [normalizeParsed({ action: "look" }, text)];
+  let steps = flattenActions(parsed).map(a => ({ ...a, say: a.say || text }));
+  if (!steps.length) steps = [{ action: "look", say: text }];
 
   for (let i = 0; i < steps.length && !game.isOver(); i++) {
     const step = steps[i];
@@ -243,7 +262,8 @@ async function playerTurn(text) {
         game.appendLog("The gray offers no answer you can trust.", "sys");
         toast("Lore generation failed or empty.", "warn");
       }
-      // push shared lore after gen commits
+      pushLore();
+    } else if (res.lore) {
       pushLore();
     }
     if (game.isOver()) showEndFromGame();
@@ -331,22 +351,12 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 }
 
-const ENDING_TITLES = {
-  rescue_ship: ["A SAIL ON THE HORIZON", "good"],
-  raft_escape: ["THE OPEN OCEAN", "good"],
-  balloon: ["INTO THE CLOUDS", "bittersweet"],
-  endure: ["THE ISLAND IS HOME", "bittersweet"],
-  perish: ["THE SEA KEEPS YOU", "bad"]
-};
-
 function showEndFromGame() {
   const kind = game.ending();
-  const meta = ENDING_TITLES[kind] || ["THE WATCH ENDS", "sys"];
-  const st = game.exportState();
-  const last = (st.S && st.S.log && st.S.log.length) ? st.S.log[st.S.log.length - 1].t : "";
-  document.getElementById("endTitle").textContent = meta[0];
-  document.getElementById("endTitle").style.color = meta[1] === "bad" ? "var(--bad)" : "var(--good)";
-  document.getElementById("endBody").textContent = last;
+  const e = ENDINGS[kind] || ["THE WATCH ENDS", "sys", ""];
+  document.getElementById("endTitle").textContent = e[0];
+  document.getElementById("endTitle").style.color = e[1] === "bad" ? "var(--bad)" : "var(--good)";
+  document.getElementById("endBody").textContent = e[2];
   document.getElementById("endModal").style.display = "flex";
   autoContribute();
 }

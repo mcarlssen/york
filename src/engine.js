@@ -860,7 +860,7 @@ function normalizeParsed(a, fallbackSay){
 }
 
 
-export { WORLD_DOC, offlineParse, buildWorld, validateFactClient, flattenActions, normalizeParsed, extractJSON };
+export { WORLD_DOC, offlineParse, buildWorld, ENDINGS };
 
 export function createGame(opts = {}) {
   _storage = opts.storage || defaultStorage();
