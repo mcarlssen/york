@@ -2,7 +2,7 @@ import { readdirSync, mkdirSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { dirname, join, isAbsolute } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { loadConfig } from "./config.mjs";
+import { loadConfigWithLlmStore } from "./config.mjs";
 import { createLlmClient } from "./llm.mjs";
 import { createDecideAction } from "./player.mjs";
 import { decideOffline } from "./player-offline.mjs";
@@ -74,7 +74,7 @@ function requireKeyUnlessOffline(config, baseline) {
   if (config.API_BASE) return;
   if (config.OPENROUTER_API_KEY) return;
   console.error(
-    "OPENROUTER_API_KEY required for llm baseline (or set BASELINE=offline / API_BASE)."
+    "API key required for llm baseline (set a *_API_KEY / OPENROUTER_API_KEY, or BASELINE=offline / API_BASE)."
   );
   process.exit(1);
 }
@@ -102,7 +102,7 @@ function shortSummary(label, data) {
 }
 
 export async function main() {
-  const config = loadConfig();
+  const config = await loadConfigWithLlmStore();
   const baseline = baselineMode(config);
 
   console.log("replaying fixtures…");

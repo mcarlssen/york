@@ -62,6 +62,14 @@
   .footer{margin-top:24px;color:var(--dim);font-size:11px;border-top:1px solid var(--line);padding-top:12px}
   .empty{color:var(--dim);font-style:italic;padding:40px;text-align:center}
   .loading{color:var(--fog);text-align:center;padding:40px}
+  .llm-panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px 16px;margin-bottom:16px}
+  .llm-panel h2{margin:0 0 6px;font-size:14px;letter-spacing:1px;color:var(--good)}
+  .llm-hint{color:var(--dim);font-size:11px;margin:0 0 12px}
+  .llm-form{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end}
+  .llm-form label{display:flex;flex-direction:column;gap:4px;color:var(--dim);font-size:11px;flex:1;min-width:180px}
+  .llm-form input,.llm-form select{background:#0c2018;color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:8px 10px;font:inherit;width:100%}
+  .llm-form input:focus,.llm-form select:focus{outline:none;border-color:var(--ink)}
+  .llm-store{color:var(--dim);font-size:11px;align-self:center}
   @media(max-width:900px){.node-text{max-width:300px}}
 </style>
 </head>
@@ -77,6 +85,24 @@
       <button class="btn" id="btnExport">Export JSON</button>
     </div>
   </header>
+
+  <section class="llm-panel" id="llmPanel" aria-labelledby="llmHeading">
+    <h2 id="llmHeading">LLM Router</h2>
+    <p class="llm-hint">Endpoint URL, which Vercel <code>*_API_KEY</code> to use, and one model for player + lore validation. Key <em>values</em> stay in env — never pasted here.</p>
+    <div class="llm-form">
+      <label>Endpoint URL
+        <input type="url" id="llmEndpoint" placeholder="https://openrouter.ai/api/v1/chat/completions" autocomplete="off" />
+      </label>
+      <label>API key env
+        <select id="llmApiKeyEnv"></select>
+      </label>
+      <label>Model
+        <input type="text" id="llmModel" placeholder="nvidia/nemotron-3-ultra-550b-a55b:free" autocomplete="off" />
+      </label>
+      <button type="button" class="btn" id="btnSaveLlm">Save LLM config</button>
+      <span class="llm-store" id="llmStore"></span>
+    </div>
+  </section>
 
   <div class="toolbar">
     <input type="search" id="search" placeholder="Search text, subject, tags..." aria-label="Search nodes">
@@ -367,6 +393,62 @@ async function exportJSON(){
   showToast("Exported JSON","ok");
 }
 
+// --- LLM Router config ---
+const LLM_KEY_LS = "york:llm-apiKeyEnv";
+
+function fillApiKeySelect(envs, preferred) {
+  const sel = document.getElementById("llmApiKeyEnv");
+  const last = localStorage.getItem(LLM_KEY_LS);
+  const pick = preferred || (envs.includes(last) ? last : (envs[0] || ""));
+  sel.innerHTML = envs.length
+    ? envs.map((n) => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join("")
+    : `<option value="">(no *_API_KEY in env)</option>`;
+  if (pick && envs.includes(pick)) sel.value = pick;
+}
+
+async function loadLlmConfig() {
+  const r = await fetch(`${API_BASE}/llm-config`);
+  if (!r.ok) throw new Error(`llm-config GET ${r.status}`);
+  const data = await r.json();
+  const cfg = data.config || {};
+  document.getElementById("llmEndpoint").value = cfg.endpointUrl || "";
+  document.getElementById("llmModel").value = cfg.model || "";
+  fillApiKeySelect(data.apiKeyEnvs || [], cfg.apiKeyEnv);
+  document.getElementById("llmStore").textContent = data.store ? `store: ${data.store}` : "";
+}
+
+async function saveLlmConfig() {
+  const btn = document.getElementById("btnSaveLlm");
+  btn.disabled = true;
+  try {
+    const body = {
+      endpointUrl: document.getElementById("llmEndpoint").value.trim(),
+      apiKeyEnv: document.getElementById("llmApiKeyEnv").value,
+      model: document.getElementById("llmModel").value.trim(),
+    };
+    const r = await fetch(`${API_BASE}/llm-config`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      showToast(data.why || data.note || `save failed (${r.status})`, "err");
+      return;
+    }
+    if (body.apiKeyEnv) localStorage.setItem(LLM_KEY_LS, body.apiKeyEnv);
+    fillApiKeySelect(data.apiKeyEnvs || [], data.config && data.config.apiKeyEnv);
+    document.getElementById("llmEndpoint").value = (data.config && data.config.endpointUrl) || body.endpointUrl;
+    document.getElementById("llmModel").value = (data.config && data.config.model) || body.model;
+    document.getElementById("llmStore").textContent = data.store ? `store: ${data.store}` : "";
+    showToast("LLM config saved", "ok");
+  } catch (e) {
+    showToast(e.message || "save failed", "err");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 // --- Event Listeners ---
 document.getElementById("search").addEventListener("input",renderTable);
 document.getElementById("filterSource").addEventListener("change",renderTable);
@@ -374,6 +456,7 @@ document.getElementById("filterStatus").addEventListener("change",renderTable);
 document.getElementById("showOnlyCandidate").addEventListener("change",renderTable);
 document.getElementById("btnRefresh").addEventListener("click",init);
 document.getElementById("btnExport").addEventListener("click",exportJSON);
+document.getElementById("btnSaveLlm").addEventListener("click",saveLlmConfig);
 document.getElementById("btnAcceptAll").addEventListener("click",()=>{
   const candidates=allNodes.filter(n=>computeStatus(n)==="candidate");
   for(const n of candidates) sessionAccepted.add(n.id);
@@ -385,6 +468,7 @@ document.getElementById("btnAcceptAll").addEventListener("click",()=>{
 async function init(){
   document.querySelector("#loreTable tbody").innerHTML='<tr><td colspan="8" class="loading">Loading shared graph & canon...</td></tr>';
   try{
+    try { await loadLlmConfig(); } catch (e) { console.warn("llm-config:", e); }
     await loadCanonTexts();
     const graph=await loadSharedGraph();
     allNodes=graph.nodes;

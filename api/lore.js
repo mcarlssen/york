@@ -2,6 +2,8 @@
 // GET  /api/lore?world=meridian       -> { world, nodes:[...], edges:[...], count }
 // POST /api/lore  { world, nodes:[...] } -> { ok, merged, note }
 // POST /api/llm   { system, user, maxTokens } -> { ok, content }  (LLM proxy; key stays server-side)
+// GET  /api/llm-config                -> { config, apiKeyEnvs, store }
+// PUT  /api/llm-config { endpointUrl, apiKeyEnv, model }
 //
 // This is the SHARED tier of the three-tier memory architecture
 // (local -> shared -> canonical). It merges player-generated lore that
@@ -11,8 +13,10 @@
 // players may only PROPOSE; the engine + this validator ESTABLISH.
 //
 // The /api/llm route also proxies player LLM calls (interpretation, world
-// generation) so the OpenRouter key never ships to the client. The engine
-// falls back to its offline parser whenever the proxy returns no content.
+// generation) so provider API keys never ship to the client. Endpoint URL,
+// which *_API_KEY env to use, and model are admin-editable via Redis
+// (see /api/llm-config). The engine falls back to its offline parser
+// whenever the proxy returns no content.
 //
 // Storage: Upstash Redis when deployed. Accepts UPSTASH_REDIS_REST_* or the Vercel
 // Marketplace aliases KV_REST_API_URL / KV_REST_API_TOKEN. Local dev falls back to
@@ -21,6 +25,16 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { getRedis } from "../scripts/lib/redis.mjs";
+import {
+  readLlmConfig,
+  writeLlmConfig,
+  validateLlmConfig,
+  normalizeLlmConfig,
+  resolveLlmConfig,
+  publicLlmConfigPayload,
+  LOCAL_LLM_CONFIG_FILE,
+} from "../scripts/lib/llm-config.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -78,41 +92,25 @@ function extractJSON(raw) {
   try { return JSON.parse(s); } catch { return null; }
 }
 
-// Semantic contradiction check. When a server-side OPENROUTER_API_KEY is set, the model
+// Semantic contradiction check. When a server-side API key is configured, the model
 // judges whether the candidate fact conflicts with the established world. Returns
 // { conflict, why } or null when no LLM is available (caller falls back to the heuristic).
 // Degrades safely: any error/empty response => null (treated as "no verdict", not "reject").
 async function semanticConflict(text, ctx) {
-  const key = process.env.OPENROUTER_API_KEY;
-  if (!key) return null;
-  const model = process.env.LORE_VALIDATOR_MODEL || "nvidia/nemotron-3-ultra-550b-a55b:free";
-  const sys = `You are a world-consistency validator. Given an ESTABLISHED world (rules + facts) ` +
-    `and a CANDIDATE fact, decide whether the candidate contradicts the established world. ` +
-    `Answer ONLY JSON: {"conflict": true|false, "why": "short reason or empty"}. ` +
-    `A conflict means the candidate asserts something impossible or contradictory in this world ` +
-    `(e.g. cold life on an equatorial island, magic, a being the world explicitly omits). ` +
-    `Merely adding new consistent detail (a new reef fish, a new tide pool) is NOT a conflict.`;
-  try {
-    const r = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json", "HTTP-Referer": "http://localhost" },
-      body: JSON.stringify({
-        model, max_tokens: 200,
-        messages: [
-          { role: "system", content: sys },
-          { role: "user", content: `ESTABLISHED WORLD:\n${ctx}\n\nCANDIDATE FACT:\n"${text}"` },
-        ],
-      }),
-    });
-    if (!r.ok) return null;
-    const d = await r.json();
-    const raw = (d.choices && d.choices[0] && d.choices[0].message && (d.choices[0].message.content || ""));
-    const j = extractJSON(raw);
-    if (!j || typeof j.conflict !== "boolean") return null;
-    return { conflict: j.conflict, why: j.why || "" };
-  } catch {
-    return null;
-  }
+  const out = await callChatCompletions(
+    `You are a world-consistency validator. Given an ESTABLISHED world (rules + facts) ` +
+      `and a CANDIDATE fact, decide whether the candidate contradicts the established world. ` +
+      `Answer ONLY JSON: {"conflict": true|false, "why": "short reason or empty"}. ` +
+      `A conflict means the candidate asserts something impossible or contradictory in this world ` +
+      `(e.g. cold life on an equatorial island, magic, a being the world explicitly omits). ` +
+      `Merely adding new consistent detail (a new reef fish, a new tide pool) is NOT a conflict.`,
+    `ESTABLISHED WORLD:\n${ctx}\n\nCANDIDATE FACT:\n"${text}"`,
+    200
+  );
+  if (!out.content) return null;
+  const j = extractJSON(out.content);
+  if (!j || typeof j.conflict !== "boolean") return null;
+  return { conflict: j.conflict, why: j.why || "" };
 }
 
 // Validate a single pushed node. Async because the semantic check may call the LLM.
@@ -135,20 +133,21 @@ async function validateNode(n, doc) {
 
 export { validateNode, semanticConflict, forbiddenTerms, canonContext };
 
-// --- LLM proxy: players never see the key; the server holds OPENROUTER_API_KEY ----
-// Engine POSTs { system, user, maxTokens } here; we forward to OpenRouter and return
-// { content }. Any failure returns { content: null } so the engine falls back to its
-// offline parser. The interpreter/generator/predict models are configurable via
-// YORK_LLM_MODEL (defaults to the engine's pinned free slug).
+// --- LLM proxy: players never see the key; server holds *_API_KEY env values ----
+// Engine POSTs { system, user, maxTokens } here; we forward to the configured
+// OpenAI-compatible chat-completions URL and return { content }. Any failure
+// returns { content: null } so the engine falls back to its offline parser.
+// Endpoint / apiKeyEnv / model come from Redis admin config (see /api/llm-config).
 // Returns { content, status, code }. status: ok | empty | rate_limit | server_error | no_key
-async function callOpenRouter(system, user, maxTokens) {
-  const key = process.env.OPENROUTER_API_KEY;
-  if (!key) return { content: null, status: "no_key", code: 0 };
-  const model = process.env.YORK_LLM_MODEL || "nvidia/nemotron-3-ultra-550b-a55b:free";
+async function callChatCompletions(system, user, maxTokens) {
+  const rdb = await getRedis();
+  const stored = await readLlmConfig(rdb);
+  const { endpointUrl, apiKey, model } = resolveLlmConfig(stored, process.env);
+  if (!apiKey) return { content: null, status: "no_key", code: 0 };
   try {
-    const r = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const r = await fetch(endpointUrl, {
       method: "POST",
-      headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json", "HTTP-Referer": "http://localhost" },
+      headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json", "HTTP-Referer": "http://localhost" },
       body: JSON.stringify({ model, max_tokens: maxTokens || 200, messages: [
         { role: "system", content: system },
         { role: "user", content: user },
@@ -163,33 +162,9 @@ async function callOpenRouter(system, user, maxTokens) {
     return { content: null, status: "server_error", code: 0 };
   }
 }
-// Storage: Upstash Redis when deployed. Accept either Upstash-native env names or the
-// Vercel Marketplace aliases (KV_REST_API_URL / KV_REST_API_TOKEN) that the integration
-// auto-provisions. Without them, fall back to a local JSON file for dev.
+
 const STORE_KEY = (world) => `york:lore:${world}`;
 const LOCAL_FILE = join(__dirname, "..", ".cache", "shared-lore.json");
-
-function redisRestCreds() {
-  const url = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL || "";
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN || "";
-  return url && token ? { url, token } : null;
-}
-
-let redis = null;
-async function getRedis() {
-  if (redis !== null) return redis;
-  const creds = redisRestCreds();
-  if (creds) {
-    try {
-      const mod = await import("@upstash/redis");
-      if (mod && mod.Redis) redis = new mod.Redis(creds);
-      else redis = false;
-    } catch { redis = false; }
-  } else {
-    redis = false;
-  }
-  return redis;
-}
 
 async function readGraph(world) {
   const r = await getRedis();
@@ -311,11 +286,40 @@ export default async function handler(req, res) {
     let body;
     try { body = typeof req.body === "string" ? JSON.parse(req.body) : req.body; }
     catch { return res.status(400).json({ ok: false, why: "invalid JSON body" }); }
-    const out = await callOpenRouter(body.system, body.user, body.maxTokens);
+    const out = await callChatCompletions(body.system, body.user, body.maxTokens);
     if (out.status === "rate_limit") return res.status(429).json({ ok: false, content: null, why: "rate_limit" });
     if (out.status === "no_key") return res.status(503).json({ ok: false, content: null, why: "no_key" });
     if (out.status === "server_error") return res.status(502).json({ ok: false, content: null, why: "upstream", code: out.code });
     return res.status(200).json({ ok: true, content: out.content });
+  }
+
+  if (req.method === "GET" && path === "/api/llm-config") {
+    const rdb = await getRedis();
+    const stored = await readLlmConfig(rdb);
+    const store = rdb ? "redis" : (existsSync(LOCAL_LLM_CONFIG_FILE) ? "file" : "empty");
+    return res.status(200).json(publicLlmConfigPayload(stored, process.env, store));
+  }
+
+  if (req.method === "PUT" && path === "/api/llm-config") {
+    let body;
+    try { body = typeof req.body === "string" ? JSON.parse(req.body) : req.body; }
+    catch { return res.status(400).json({ ok: false, why: "invalid JSON body" }); }
+    const why = validateLlmConfig(body, process.env);
+    if (why) return res.status(400).json({ ok: false, why });
+    const config = normalizeLlmConfig(body);
+    const rdb = await getRedis();
+    try {
+      const { store } = await writeLlmConfig(rdb, config);
+      return res.status(200).json({ ok: true, ...publicLlmConfigPayload(config, process.env, store) });
+    } catch (e) {
+      if (e && e.code === "no_durable_store") {
+        return res.status(503).json({
+          ok: false, why: "no_durable_store",
+          note: "Set KV_REST_API_URL + KV_REST_API_TOKEN (Vercel Upstash) or UPSTASH_REDIS_REST_* — Vercel has no persistent filesystem.",
+        });
+      }
+      throw e;
+    }
   }
 
   return res.status(404).json({ ok: false, why: "not found" });
