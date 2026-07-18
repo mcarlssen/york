@@ -104,10 +104,19 @@ export async function runGame({
     });
 
     if (result.pendingGen) {
-      if (arm === "spine" || genCalls >= config.MAX_GEN_PER_RUN) {
+      if (arm === "spine") {
         const g = await game.genStep(result.pendingGen);
         genSkipped++;
         trajectory.push(g);
+      } else if (genCalls >= config.MAX_GEN_PER_RUN) {
+        genSkipped++;
+        trajectory.push({
+          kind: "gen",
+          type: result.pendingGen.type,
+          ok: false,
+          verdict: "skipped",
+          why: "max_gen_per_run",
+        });
       } else {
         const g = await game.genStep(result.pendingGen);
         genCalls++;

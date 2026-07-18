@@ -30,7 +30,11 @@ function baselineMode(config) {
 
 function tokensUsed(client) {
   if (!client) return 0;
+  if (typeof client.tokensUsed === "function") return client.tokensUsed();
   if (typeof client.tokensUsed === "number") return client.tokensUsed;
+  if (typeof client.usage?.totalTokens === "number") {
+    return client.usage.totalTokens;
+  }
   if (typeof client.usage?.total_tokens === "number") {
     return client.usage.total_tokens;
   }

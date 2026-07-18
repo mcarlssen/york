@@ -43,18 +43,22 @@ function buildRejectionHotlist(runs) {
 }
 
 function deadActions(runs) {
-  const taken = new Set();
-  const rejected = new Set();
+  const okCount = new Map();
+  const failCount = new Map();
   for (const run of runs) {
     for (const step of run.trajectory || []) {
       if (step.kind !== "act") continue;
       const action = step.action?.action;
       if (!action) continue;
-      taken.add(action);
-      if (step.result?.ok === false) rejected.add(action);
+      if (step.result?.ok === false) {
+        failCount.set(action, (failCount.get(action) || 0) + 1);
+      } else {
+        okCount.set(action, (okCount.get(action) || 0) + 1);
+      }
     }
   }
-  return [...rejected].filter((a) => !taken.has(a) || rejected.has(a));
+  // always-rejected: attempted and never succeeded
+  return [...failCount.keys()].filter((a) => !okCount.has(a));
 }
 
 function genSteps(runs) {
