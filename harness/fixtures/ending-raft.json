@@ -1,0 +1,20 @@
+{
+  "name": "ending-raft",
+  "arm": "spine",
+  "actions": [
+    { "action": "go", "target": "east" },
+    { "action": "salvage", "target": "tools" },
+    { "action": "salvage", "target": "sailcloth" },
+    { "action": "go", "target": "west" },
+    { "action": "go", "target": "north" },
+    { "action": "take", "target": "bamboo" },
+    { "action": "go", "target": "south" },
+    { "action": "go", "target": "south" },
+    { "action": "build", "target": "raft" },
+    { "action": "launch" }
+  ],
+  "expect": {
+    "ending": "raft_escape",
+    "flags": { "raftBuilt": true }
+  }
+}

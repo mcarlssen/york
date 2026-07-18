@@ -1,0 +1,15 @@
+{
+  "name": "survive-salvage-path",
+  "arm": "spine",
+  "actions": [
+    { "action": "go", "target": "east" },
+    { "action": "salvage", "target": "tools" },
+    { "action": "salvage", "target": "sailcloth" },
+    { "action": "go", "target": "west" }
+  ],
+  "expect": {
+    "ending": null,
+    "inventory": ["tools", "sailcloth"],
+    "clockMin": 1
+  }
+}
