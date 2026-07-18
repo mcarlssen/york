@@ -505,6 +505,7 @@ function applyAction(a){
     case "tame": return doTame(a.target);
     case "launch": return doLaunch();
     case "ask": return doAsk(a.target, a.say);
+    case "discover": return doDiscover(a.target || a.say);
     case "eat": return doEat(a.target);
     case "wait": return doWait();
     default: return {ok:false, text:"The island does not record that action."};
@@ -648,6 +649,16 @@ function doAsk(t, say){
     return {ok:true, text:`The Meridian is breaking up on the reef. Her cargo — tools, sailcloth, provisions, a musket, a wireless — is yours if you take it before the sea does.`, cls:"fog"};
   }
   return {ok:true, text:`You put the question to the island.`, cls:"fog", pendingGen:{type:"lore", query:say||t||"?"}};
+}
+
+function doDiscover(t){
+  const q = String(t||"").trim();
+  return {
+    ok:true,
+    text:"You search for a way onward…",
+    cls:"fog",
+    pendingGen:{ type:"place", query: q || "What lies near here?" }
+  };
 }
 
 function doBuild(t){
@@ -863,6 +874,11 @@ function offlineParse(text){
 
   if(/\b(wait|rest|sleep|pass time|hold)\b/.test(t)) return one("wait");
 
+  if(/\b(discover|explore beyond|find a new place|scout for a path|scout ahead)\b/.test(t)){
+    const m = t.match(/\b(?:discover|explore beyond|find a new place|scout for a path|scout ahead)\s*(.*)$/);
+    return one("discover", (m && m[1] || "").trim() || null, null, text);
+  }
+
   return one("ask", "intent", null, text);
 }
 
@@ -934,7 +950,7 @@ async function callLLM(text){
   const sys = `You convert player commands into JSON for a castaway text adventure.
 Return ONLY JSON (no markdown). Prefer a single action object.
 For compound commands use: {"actions":[...action objects...]}.
-Schema per action: {"action":"go|take|examine|salvage|use|build|signal|tame|launch|eat|ask|look|wait","target":string|null,"item":string|null,"say":string|null}.
+Schema per action: {"action":"go|take|examine|salvage|use|build|signal|tame|launch|eat|ask|look|wait|discover","target":string|null,"item":string|null,"say":string|null}.
 
 Rules: ${SPEC.constraints.join(" ")}
 Place: ${node().name}. Exits: ${exits||"none"}. Visible: ${here}. Inventory: ${S.inv.map(itemName).join(", ")||"empty"}.
@@ -948,7 +964,8 @@ Priority:
 4. "salvage" ONLY for wreck cargo: tools, sailcloth, provisions, rifle, radio.
 5. "give X to cat/parrot" → tame.
 6. "throw/use X at Y" → use with item=X target=Y.
-7. Unknown → ask with say=original text (never invent go).`;
+7. "discover" / "explore beyond" / "find a new place" → discover.
+8. Unknown → ask with say=original text (never invent go).`;
   const { content, status, code } = await callLLMProxy(sys, text, 250);
   return { parsed: extractJSON(content || ""), status, code };
 }
