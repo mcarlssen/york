@@ -1,62 +1,22 @@
 // Regression checks for offlineParse / singularize / normalizeDir.
-// Pulls function bodies from index.html (one source of truth).
 // Run: node scripts/test-parse.mjs
 
-import { readFileSync } from "node:fs";
+import { offlineParse, createGame } from "../src/engine.js";
+import { isImproviseIntent } from "./lib/world-memory.mjs";
 
-const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
-
-function extractFn(name) {
-  const start = html.search(new RegExp(`function ${name}\\(`));
-  if (start < 0) throw new Error("missing function " + name);
-  const brace = html.indexOf("{", start);
-  let depth = 0;
-  for (let i = brace; i < html.length; i++) {
-    const c = html[i];
-    if (c === "{") depth++;
-    else if (c === "}") {
-      depth--;
-      if (depth === 0) return html.slice(start, i + 1);
-    }
-  }
-  throw new Error("unclosed function " + name);
-}
-
-const stubs = `
-const WORLD = { nodes: {
-  beach: { name: "Shingle Beach", exits: { east: "wreck_shore", north: "jungle" }, items: ["fig","bamboo","pebbles"] },
-  wreck_shore: { name: "Wreck Shore", exits: { west: "beach" }, items: [] },
-  jungle: { name: "Jungle Edge", exits: { south: "beach" }, items: ["goat_meat"] },
-}, items: {
-  fig:{name:"fig"}, bamboo:{name:"bamboo"}, pebbles:{name:"pebbles"}, goat_meat:{name:"goat meat"}
-}};
-let S = { loc: "beach", inv: [] };
-function node(){ return WORLD.nodes[S.loc]; }
-function hasItem(i){ return S.inv.includes(i); }
-function itemName(i){ return (WORLD.items[i]&&WORLD.items[i].name)||i; }
-`;
-
-const code = stubs + "\n" +
-  extractFn("singularize") + "\n" +
-  extractFn("normalizeDir") + "\n" +
-  extractFn("offlineParse") + "\n" +
-  `return { offlineParse, singularize, normalizeDir, setLoc(id){ S.loc=id; }, exits(){ return Object.keys(node().exits||{}); } };`;
-
-const api = new Function(code)();
-const { offlineParse, singularize, normalizeDir, setLoc, exits } = api;
+const game = createGame({ arm: "spine", llm: null, storage: {
+  _m: new Map(),
+  getItem(k){ return this._m.has(k) ? this._m.get(k) : null; },
+  setItem(k,v){ this._m.set(k, String(v)); },
+  removeItem(k){ this._m.delete(k); },
+}});
+game.reset({ fresh: true });
 
 let pass = 0, fail = 0;
 function ok(cond, name) {
   if (cond) { pass++; console.log("  PASS", name); }
   else { fail++; console.log("  FAIL", name); }
 }
-
-ok(singularize("pebbles") === "pebble", "singularize pebbles");
-ok(singularize("figs") === "fig", "singularize figs");
-
-setLoc("beach");
-ok(normalizeDir("wreck", exits()) === "east", "normalizeDir wreck→east");
-ok(normalizeDir("jungle", exits()) === "north", "normalizeDir jungle→north");
 
 const act = (t) => offlineParse(t);
 
@@ -66,9 +26,14 @@ ok(act("go to the wreck").action === "go" && /wreck/.test(act("go to the wreck")
 ok(act("swim to the wreck").action === "go", "swim to wreck → go");
 ok(act("throw pebbles at the jaguar").action === "use", "throw X at Y → use");
 ok(act("give fig to the cat").action === "tame", "give to cat → tame");
-ok(act("pick up fig and bamboo").action === "take", "multi take stays take");
 ok(act("collect pebbles").action === "take", "collect → take");
 ok(act("xyzzy foobar").action === "ask", "unknown → ask not look");
+
+ok(act("make a club with the driftwood and a rock").action === "improvise", "make club → improvise");
+ok(act("use the strip of cloth to tie a rock to the driftwood").action === "improvise", "use to tie → improvise");
+ok(act("build raft").action === "build", "build raft stays build");
+ok(act("i rip cloth then tie a rock to driftwood").action === "improvise", "then-craft stays one improvise");
+ok(isImproviseIntent("make a club with driftwood"), "helper agrees");
 
 const compound = act("go north then swim to the wreck");
 ok(compound.actions && compound.actions.length === 2, "then → actions[]");

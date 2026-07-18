@@ -196,7 +196,7 @@ async function callLLM(text) {
   const sys = `You convert player commands into JSON for a castaway text adventure.
 Return ONLY JSON (no markdown). Prefer a single action object.
 For compound commands use: {"actions":[...action objects...]}.
-Schema per action: {"action":"go|take|examine|salvage|use|build|signal|tame|launch|eat|ask|look|wait|discover","target":string|null,"item":string|null,"say":string|null}.
+Schema per action: {"action":"go|take|examine|salvage|use|build|signal|tame|launch|eat|ask|look|wait|discover|improvise","target":string|null,"item":string|null,"say":string|null}.
 
 Rules: ${ctx.constraints}
 Place: ${ctx.place}. Exits: ${ctx.exits || "none"}. Visible: ${ctx.here}. Inventory: ${ctx.inventory}.
@@ -206,12 +206,13 @@ Recent:\n${ctx.recent}
 Priority:
 1. Questions → ask (say=full question). Exception: bare "look around"/"what can i see" → look.
 2. "go to [place]" / "swim to [place]" → go with target=place name (not invent directions).
-3. "pick/collect/take/scavenge/find/gather X" → take. Never map those to salvage.
-4. "salvage" ONLY for wreck cargo: tools, sailcloth, provisions, rifle, radio.
-5. "give X to cat/parrot" → tame.
-6. "throw/use X at Y" → use with item=X target=Y.
-7. "discover" / "explore beyond" / "find a new place" → discover.
-8. Unknown → ask with say=original text (never invent go).`;
+3. make/craft/fashion/lash/tie/bind/improvise OR "use X to tie/lash/bind …" → improvise with say=full text. Not use, not ask. (Exception: build raft|pyre|shelter|balloon → build.)
+4. "pick/collect/take/scavenge/find/gather X" → take. Never map those to salvage.
+5. "salvage" ONLY for wreck cargo: tools, sailcloth, provisions, rifle, radio.
+6. "give X to cat/parrot" → tame.
+7. "throw/use X at Y" (attack/aim) → use with item=X target=Y. Assembly "use X to tie" is improvise (rule 3).
+8. "discover" / "explore beyond" / "find a new place" → discover.
+9. Unknown → ask with say=original text (never invent go).`;
   const { content, status, code } = await callLLMProxy(sys, text, 250);
   return { parsed: extractJSON(content || ""), status, code };
 }

@@ -1,12 +1,13 @@
 import {
   salvageLoreJSON, isJsonDump, captureWorldDelta, applyWorldDelta, placeCatalogMentions, extractJSON as extractJSONLib,
-  isCraftTakeTarget, splitSimpleTakeTargets, normalizeItemTarget, shouldHoldEntity, collectPlayerFacts
+  isCraftTakeTarget, splitSimpleTakeTargets, normalizeItemTarget, shouldHoldEntity, collectPlayerFacts,
+  isImproviseIntent, isSiteBuild, salvageImproviseJSON
 } from "../scripts/lib/world-memory.mjs";
 
 export const AGENT_API_VERSION = 1;
 
 export function getActionSchema() {
-  return ["look","examine","go","take","salvage","use","build","signal","tame","launch","ask","eat","wait","discover"];
+  return ["look","examine","go","take","salvage","use","build","signal","tame","launch","ask","eat","wait","discover","improvise"];
 }
 
 function defaultStorage() {
@@ -348,6 +349,7 @@ function applyAction(a){
     case "launch": return doLaunch();
     case "ask": return doAsk(a.target, a.say);
     case "discover": return doDiscover(a.target || a.say);
+    case "improvise": return doImprovise(a.say || a.target);
     case "eat": return doEat(a.target);
     case "wait": return doWait();
     default: return {ok:false, text:"The island does not record that action."};
@@ -427,10 +429,9 @@ function matchItem(here, tgt){
 function doTake(t){
   if(!t) return {ok:false, text:"Take what?"};
   const raw = String(t).trim();
-  // craft / compound body acts → lore gen (establish held items + playerFacts)
+  // craft / compound body acts → improvise (LLM pass/fail with materials brief)
   if(isCraftTakeTarget(raw) || splitSimpleTakeTargets(raw)===null){
-    return {ok:true, text:"You set to work.", cls:"fog", pendingGen:{type:"lore", query:
-      "Player does this now: "+raw+". Narrate the result. If they craft or hold something, include it in entities with portable:true and held:true. If clothing/body state changes, include playerFacts (e.g. \"you are wearing one sock\")."}};
+    return {ok:true, text:"You set to work.", cls:"fog", pendingGen:{type:"improvise", query: raw}};
   }
   const parts = splitSimpleTakeTargets(raw);
   if(parts && parts.length>1){
@@ -512,6 +513,16 @@ function doDiscover(t){
     text:"You search for a way onward…",
     cls:"fog",
     pendingGen:{ type:"place", query: q || "What lies near here?" }
+  };
+}
+
+function doImprovise(say){
+  const q = String(say||"").trim() || "improvise";
+  return {
+    ok:true,
+    text:"You set to work with what you have.",
+    cls:"fog",
+    pendingGen:{ type:"improvise", query: q }
   };
 }
 
@@ -649,8 +660,9 @@ function offlineParse(text){
   const t = text.toLowerCase().trim();
   const one = (action, target, item, say)=> ({action, target:target||null, item:item||null, say:say||text});
 
-  // compound: "go down, then swim to the wreck"
+  // compound: "go down, then swim to the wreck" — but one craft sequence stays improvise
   if(/\bthen\b/.test(t)){
+    if(isImproviseIntent(t)) return one("improvise", null, null, text);
     const parts = t.split(/\s+then\s+/).map(x=>x.trim()).filter(Boolean);
     if(parts.length>1) return {actions: parts.map(p=>offlineParse(p))};
   }
@@ -668,6 +680,15 @@ function offlineParse(text){
 
   if(/\bsalvage\s+(everything|all|it all)\b/.test(t))
     return one("ask", null, null, "What do you want to salvage from the wreck? Categories: tools, sailcloth, provisions, rifle, radio.");
+
+  if(/\b(make|build)\s+signal\b/.test(t) || /\b(signal|light signal|build signal)\b/.test(t))
+    return one("signal");
+
+  if(isSiteBuild(t)){
+    const m = t.match(/\b(build|craft)\s+(?:a\s+|the\s+)?(raft|pyre|shelter|balloon)\b/);
+    return one("build", m ? m[2] : null);
+  }
+  if(isImproviseIntent(t)) return one("improvise", null, null, text);
 
   const give = t.match(/\b(?:give|offer|feed)\s+(.+?)\s+to\s+(?:the\s+)?(.+)$/);
   if(give && /cat|parrot|jaguar/.test(give[2])) return one("tame", give[2]);
@@ -715,8 +736,6 @@ function offlineParse(text){
 
   const buildMatch = t.match(/\b(build|craft)\s+(.+)$/);
   if(buildMatch) return one("build", buildMatch[2].trim());
-
-  if(/\b(signal|light signal|make signal|build signal)\b/.test(t)) return one("signal");
 
   const tameMatch = t.match(/\b(tame|befriend)\s+(.+)$/);
   if(tameMatch) return one("tame", tameMatch[2].trim());
@@ -819,6 +838,54 @@ Place: ${node().name}. Inventory: ${S.inv.map(itemName).join(", ")||"empty"}.`;
   return {ok:true, text, cls:"fog", lore: j.lore||null};
 }
 
+// LLM validates improvise pass/fail given materials brief. Engine commits on pass only.
+async function genImprovise(query){
+  const here = (node().items||[]).filter(i=>!hasItem(i)).map(itemName).join(", ")||"none listed";
+  const inv = S.inv.map(itemName).join(", ")||"empty";
+  const playerLore = LORE.retrieve("player wearing holding carrying "+query, 6)
+    .filter(n => (n.tags||[]).includes("player") || (n.tags||[]).includes("state") || /you (are|were|have)|wearing|holding/i.test(n.text))
+    .map(n=>"- "+n.text).join("\n");
+  const relevant = LORE.retrieve(query+" "+node().name, 4).map(n=>"- "+n.text).join("\n");
+  const sys = `You are the DM validator for improvised crafting on an equatorial castaway island.
+The player proposes an assembly. Pass ONLY if every needed material is in INVENTORY, VISIBLE at the place, OR clearly explained in their words (e.g. tear cloth from shirt, find vines as cord, pick a beach rock).
+Fail if a material is missing and unexplained. No magic. Do not invent wreck cargo they did not salvage. Do not grant leave-island shortcuts.
+Reply ONLY with JSON:
+{"ok":true|false,"answer":"one vivid in-world sentence (pass narrates success; fail names what is missing or unexplained)","result":{"id":"snake_case","name":"display","desc":"one line"}|null,"consume":["optional inventory id to spend"],"playerFacts":["optional durable player-state fact"],"why":null|"short reason"}
+On pass, result is the finished held item. consume only real inventory ids. On fail, result null and consume [].
+CONSTRAINTS: ${SPEC.constraints.join(" ")}
+PLACE: ${node().name}
+VISIBLE: ${here}
+INVENTORY: ${inv}
+PLAYER STATE:\n${playerLore||"(none)"}
+LORE:\n${relevant||"(none)"}`;
+  const c = await llmText(sys, "Player attempts: "+query, 400);
+  if(!c) return { ok:false, answer:"Nothing comes of it — the voice will not judge the work.", why:"unavailable" };
+  const j = salvageImproviseJSON(c);
+  if(!j) return { ok:false, answer:"Nothing comes of it.", why:"parse" };
+  if(j.answer) j.answer = cleanGeneration(j.answer) || j.answer;
+  if(j.ok && (!j.result || !j.result.id)){
+    return { ok:false, answer: j.answer || "The work does not hold together.", why: j.why || "no result" };
+  }
+  return j;
+}
+
+function applyImproviseResult(out){
+  if(!out || !out.ok || !out.result) return false;
+  const id = String(out.result.id).toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"");
+  if(!id) return false;
+  registerItem(id, out.result.name||id, out.result.desc||("You fashioned "+(out.result.name||id)+"."), ["generated","improvised"], {portable:true});
+  if(!hasItem(id)) S.inv.push(id);
+  const n = node();
+  if(n.items){ const ix = n.items.indexOf(id); if(ix>=0) n.items.splice(ix,1); }
+  for(const cid of (out.consume||[])){
+    const key = String(cid).toLowerCase().replace(/[^a-z0-9]+/g,"_");
+    const idx = S.inv.findIndex(i => i===key || i===cid || itemName(i).toLowerCase()===String(cid).toLowerCase());
+    if(idx>=0) S.inv.splice(idx,1);
+  }
+  tick(); ageWreck(1);
+  return true;
+}
+
 // The engine's validator: a proposed new place must respect the rules before it is added.
 function validateNewPlace(prop){
   // prop: {id, name, desc, dirBack} — dirBack is the exit key from the new node back to current
@@ -877,15 +944,20 @@ function flattenActions(parsed){
 function normalizeParsed(a, fallbackSay){
   let action = String(a.action||"look").toLowerCase();
   let target = a.target||null;
+  const say = a.say||fallbackSay||"";
   // engine guard: salvage is wreck-cargo only; scavenging beach junk is take
   if(action==="salvage" && target && !/^(tools|sailcloth|provisions|rifle|radio)$/i.test(String(target).trim())){
     action = "take";
+  }
+  // floor: craft/assemble misrouted as use/ask/build → improvise
+  if(say && isImproviseIntent(say) && !isSiteBuild(say) && ["use","ask","build"].includes(action)){
+    action = "improvise";
   }
   return {
     action,
     target,
     item: a.item||null,
-    say: a.say||fallbackSay||null
+    say: say||null
   };
 }
 
@@ -1052,6 +1124,31 @@ export function createGame(opts = {}) {
       return {
         kind: "gen", type: "emerge", ok: !!out.ok, verdict: out.ok ? "accepted" : "rejected",
         text: out.text, lifeDelta: undefined, consumeItem: undefined, why: out.ok ? undefined : "nothing"
+      };
+    }
+
+    if (pending.type === "improvise") {
+      const out = await genImprovise(pending.query);
+      const answer = (out && out.answer) || (out && out.ok ? "You finish the work." : "Nothing comes of it.");
+      pushLog(answer, out && out.ok ? "llm" : "warn");
+      if (out && out.ok) {
+        applyImproviseResult(out);
+        commitLore("improvise:" + (LORE.seq + 1), answer, { tags: ["generated", "improvise"], text: answer });
+        commitPlayerFacts({ answer, playerFacts: out.playerFacts || [], facts: [] });
+        if (out.result) {
+          _harvest.push({ kind: "entity", text: out.result.name || out.result.id, meta: out.result, verdict: "accepted", tags: ["improvised"] });
+          _loreStats.entitiesAdded++;
+        }
+        _loreStats.generated++;
+        saveState();
+        return {
+          kind: "gen", type: "improvise", ok: true, verdict: "accepted",
+          answer, result: out.result, consume: out.consume, playerFacts: out.playerFacts
+        };
+      }
+      return {
+        kind: "gen", type: "improvise", ok: false, verdict: "rejected",
+        answer, why: (out && out.why) || "failed"
       };
     }
 

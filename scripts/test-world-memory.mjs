@@ -12,6 +12,9 @@ import {
   normalizeItemTarget,
   shouldHoldEntity,
   collectPlayerFacts,
+  isImproviseIntent,
+  isSiteBuild,
+  salvageImproviseJSON,
 } from "./lib/world-memory.mjs";
 
 let pass = 0, fail = 0;
@@ -118,6 +121,28 @@ function ok(cond, name) {
     playerFacts: ["you are wearing one sock"],
   });
   ok(pf.some(f => /wearing one sock/i.test(f)), "playerFacts collected + inferred");
+}
+
+// --- improvise intent routing + pass/fail JSON --------------------------------
+{
+  ok(isImproviseIntent("make a club with the driftwood, and a rock"), "make club → improvise");
+  ok(isImproviseIntent("use the strip of cloth to tie a rock to the driftwood"), "use to tie → improvise");
+  ok(isImproviseIntent("i rip cloth then tie a rock to my driftwood"), "rip then tie → improvise");
+  ok(!isImproviseIntent("build raft"), "build raft is site build not improvise");
+  ok(isSiteBuild("build a raft"), "site build raft");
+  ok(!isImproviseIntent("make signal"), "make signal not improvise");
+  ok(!isImproviseIntent("collect driftwood"), "collect is take not improvise");
+  const passJ = salvageImproviseJSON(JSON.stringify({
+    ok: true,
+    answer: "You lash a fist rock to the driftwood with shirt cloth.",
+    result: { id: "stone_club", name: "stone-headed club", desc: "crude but heavy" },
+    consume: ["driftwood"],
+    playerFacts: ["you tore a strip from your shirt"],
+    why: null,
+  }));
+  ok(passJ && passJ.ok && passJ.result.id === "stone_club", "improvise pass JSON");
+  const failJ = salvageImproviseJSON('{"ok":false,"answer":"You have driftwood but no binder.","result":null,"consume":[],"why":"missing binder"}');
+  ok(failJ && !failJ.ok && /binder/i.test(failJ.answer), "improvise fail JSON");
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
