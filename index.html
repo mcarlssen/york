@@ -841,6 +841,11 @@ function offlineParse(text){
   const examineMatch = t.match(/\b(examine|look at|inspect|read|check)\s+(.+)$/);
   if(examineMatch) return one("examine", examineMatch[2].trim());
 
+  if(/\b(discover|explore beyond|find a new place|scout for a path|scout ahead)\b/.test(t)){
+    const m = t.match(/\b(?:discover|explore beyond|find a new place|scout for a path|scout ahead)\s*(.*)$/);
+    return one("discover", (m && m[1] || "").trim() || null, null, text);
+  }
+
   const takeMatch = t.match(/\b(take|pick up|pick|collect|get|grab|scavenge|find|gather|fetch)\s+(.+)$/);
   if(takeMatch){
     let target = takeMatch[2].trim().replace(/^(the|a|an|some)\s+/,"");
@@ -873,11 +878,6 @@ function offlineParse(text){
   if(eatMatch) return one("eat", eatMatch[2].trim());
 
   if(/\b(wait|rest|sleep|pass time|hold)\b/.test(t)) return one("wait");
-
-  if(/\b(discover|explore beyond|find a new place|scout for a path|scout ahead)\b/.test(t)){
-    const m = t.match(/\b(?:discover|explore beyond|find a new place|scout for a path|scout ahead)\s*(.*)$/);
-    return one("discover", (m && m[1] || "").trim() || null, null, text);
-  }
 
   return one("ask", "intent", null, text);
 }
