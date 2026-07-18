@@ -8,7 +8,8 @@
   "scripts": {
     "test:shared-lore": "node scripts/test-shared-lore.mjs",
     "test:world-memory": "node scripts/test-world-memory.mjs",
-    "test": "node scripts/test-shared-lore.mjs && node scripts/test-world-memory.mjs",
+    "test:llm-config": "node scripts/test-llm-config.mjs",
+    "test": "node scripts/test-llm-config.mjs && node scripts/test-shared-lore.mjs && node scripts/test-world-memory.mjs",
     "curate": "node scripts/curate-lore.mjs",
     "harness": "node harness/loop.mjs",
     "harness:replay": "node harness/replay.mjs",

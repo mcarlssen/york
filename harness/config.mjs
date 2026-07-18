@@ -1,12 +1,20 @@
 import { readFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { getRedis } from "../scripts/lib/redis.mjs";
+import {
+  readLlmConfig,
+  resolveLlmConfig,
+  DEFAULT_ENDPOINT_URL,
+} from "../scripts/lib/llm-config.mjs";
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 const DEFAULTS = {
   OPENROUTER_API_KEY: undefined,
   API_BASE: null,
+  LLM_ENDPOINT_URL: DEFAULT_ENDPOINT_URL,
+  LLM_API_KEY_ENV: "OPENROUTER_API_KEY",
   PLAYER_MODEL: "nvidia/nemotron-3-ultra-550b-a55b:free",
   CRITIC_MODEL: "nvidia/nemotron-3-ultra-550b-a55b:free",
   RUNS_SPINE: 10,
@@ -93,4 +101,22 @@ export function loadConfig(opts = {}) {
   mergeEnv(config, opts.env ?? process.env);
   if (opts.overrides) Object.assign(config, opts.overrides);
   return config;
+}
+
+/** Overlay Redis/file LLM router config onto a loaded config object. */
+export async function applyLlmStore(config, opts = {}) {
+  const env = opts.env ?? process.env;
+  const redis = opts.redis !== undefined ? opts.redis : await getRedis(env);
+  const stored = opts.stored !== undefined ? opts.stored : await readLlmConfig(redis);
+  const resolved = resolveLlmConfig(stored, env);
+  config.LLM_ENDPOINT_URL = resolved.endpointUrl;
+  config.LLM_API_KEY_ENV = resolved.apiKeyEnv;
+  config.PLAYER_MODEL = resolved.model;
+  if (resolved.apiKey) config.OPENROUTER_API_KEY = resolved.apiKey;
+  return config;
+}
+
+export async function loadConfigWithLlmStore(opts = {}) {
+  const config = loadConfig(opts);
+  return applyLlmStore(config, opts);
 }

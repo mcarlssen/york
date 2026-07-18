@@ -5,8 +5,10 @@
 import { rmSync, existsSync, readFileSync } from "node:fs";
 
 const CACHE = new URL("../.cache/shared-lore.json", import.meta.url);
+const LLM_CACHE = new URL("../.cache/llm-config.json", import.meta.url);
 // start clean so the test is deterministic
 if (existsSync(new URL(CACHE))) rmSync(new URL(CACHE));
+if (existsSync(new URL(LLM_CACHE))) rmSync(new URL(LLM_CACHE));
 
 const mod = await import("../api/lore.js");
 const handler = mod.default;
@@ -146,6 +148,47 @@ function ok(cond, name) { if (cond) { pass++; console.log("  PASS", name); } els
      "/api/llm proxies player call and returns content");
   delete process.env.OPENROUTER_API_KEY;
   globalThis.fetch = realFetch;
+}
+
+// --- 7c. /api/llm-config GET/PUT ------------------------------------------
+{
+  const { LOCAL_LLM_CONFIG_FILE } = await import("../scripts/lib/llm-config.mjs");
+  if (existsSync(LOCAL_LLM_CONFIG_FILE)) rmSync(LOCAL_LLM_CONFIG_FILE);
+  process.env.OPENROUTER_API_KEY = "test-key";
+  process.env.TOKENROUTER_API_KEY = "tr-key";
+
+  const getRes = mkRes();
+  await handler(mkReq("GET", "http://x/api/llm-config"), getRes);
+  ok(getRes.statusCode === 200 && Array.isArray(getRes.body.apiKeyEnvs), "GET llm-config returns apiKeyEnvs");
+  ok(getRes.body.apiKeyEnvs.includes("OPENROUTER_API_KEY") && getRes.body.apiKeyEnvs.includes("TOKENROUTER_API_KEY"),
+     "GET llm-config autodiscovers keys");
+  ok(getRes.body.config && getRes.body.config.model, "GET llm-config has resolved model");
+
+  const putBad = mkRes();
+  await handler(mkReq("PUT", "http://x/api/llm-config", {
+    endpointUrl: "https://tokenrouter.me/v1/chat/completions",
+    apiKeyEnv: "MISSING_API_KEY",
+    model: "x",
+  }), putBad);
+  ok(putBad.statusCode === 400, "PUT llm-config rejects missing key env");
+
+  const putOk = mkRes();
+  await handler(mkReq("PUT", "http://x/api/llm-config", {
+    endpointUrl: "https://tokenrouter.me/v1/chat/completions",
+    apiKeyEnv: "TOKENROUTER_API_KEY",
+    model: "admin-model",
+  }), putOk);
+  ok(putOk.statusCode === 200 && putOk.body.ok === true && putOk.body.config.model === "admin-model",
+     "PUT llm-config persists model");
+
+  const get2 = mkRes();
+  await handler(mkReq("GET", "http://x/api/llm-config"), get2);
+  ok(get2.body.config.apiKeyEnv === "TOKENROUTER_API_KEY" && get2.body.config.endpointUrl.includes("tokenrouter"),
+     "GET llm-config reflects saved config");
+
+  if (existsSync(LOCAL_LLM_CONFIG_FILE)) rmSync(LOCAL_LLM_CONFIG_FILE);
+  delete process.env.OPENROUTER_API_KEY;
+  delete process.env.TOKENROUTER_API_KEY;
 }
 
 // --- 8. curator script diffs shared vs canonical ---------------------------

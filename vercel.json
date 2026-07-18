@@ -4,6 +4,7 @@
   },
   "rewrites": [
     { "source": "/api/lore", "destination": "/api/lore.js" },
-    { "source": "/api/llm", "destination": "/api/lore.js" }
+    { "source": "/api/llm", "destination": "/api/lore.js" },
+    { "source": "/api/llm-config", "destination": "/api/lore.js" }
   ]
 }

@@ -254,7 +254,10 @@ node scripts/test-shared-lore.mjs
 The game is static (`index.html`). The shared-lore API needs a Vercel deployment with an
 Upstash Redis database — use the integration’s `KV_REST_API_URL` + `KV_REST_API_TOKEN`, or
 Upstash-native `UPSTASH_REDIS_REST_*` — and an
-`OPENROUTER_API_KEY` (used for the semantic canon check *and* the player LLM proxy at
-`/api/llm`). Optionally set `YORK_LLM_MODEL` to override the server-side interpretation model
-(defaults to `nvidia/nemotron-3-ultra-550b-a55b:free`). `window.YORK_API_BASE` defaults to
-`/api`, which works when the game and API are served from the same Vercel deployment.
+`OPENROUTER_API_KEY` (and/or other `*_API_KEY` values) for the semantic canon check and
+the player LLM proxy at `/api/llm`. Router endpoint URL, which key env to use, and model
+are editable on `admin.html` → **LLM Router** (stored in Redis as `york:llm-config`).
+`YORK_LLM_MODEL` / `LORE_VALIDATOR_MODEL` remain cold-start fallbacks only when Redis has
+no config (default model `nvidia/nemotron-3-ultra-550b-a55b:free`). `window.YORK_API_BASE`
+defaults to `/api`, which works when the game and API are served from the same Vercel
+deployment.

@@ -1,4 +1,4 @@
-const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
+const DEFAULT_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
 
 function extractContent(data) {
   return (
@@ -41,6 +41,7 @@ export function createLlmClient(config) {
   const model = config.PLAYER_MODEL;
   const transport = config.API_BASE ? "proxy" : "direct";
   const usage = { totalTokens: 0 };
+  const endpointUrl = config.LLM_ENDPOINT_URL || DEFAULT_ENDPOINT;
 
   async function complete({ system, user, maxTokens }) {
     try {
@@ -53,7 +54,7 @@ export function createLlmClient(config) {
         });
         result = await readResponse(r, "proxy");
       } else {
-        const r = await fetch(OPENROUTER_URL, {
+        const r = await fetch(endpointUrl, {
           method: "POST",
           headers: {
             Authorization: `Bearer ${config.OPENROUTER_API_KEY}`,
