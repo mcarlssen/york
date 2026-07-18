@@ -214,7 +214,10 @@ async function loadSharedGraph(){
   const r=await fetch(`${API_BASE}/lore?world=${WORLD}`);
   if(!r.ok) throw new Error(`GET /api/lore failed: ${r.status}`);
   const data=await r.json();
-  return data.nodes||[];
+  if(data.store==="ephemeral"||data.note){
+    console.warn("Shared lore store:", data.store, data.note||"");
+  }
+  return { nodes: data.nodes||[], store: data.store||"", note: data.note||"" };
 }
 
 function computeStatus(node){
@@ -383,9 +386,18 @@ async function init(){
   document.querySelector("#loreTable tbody").innerHTML='<tr><td colspan="8" class="loading">Loading shared graph & canon...</td></tr>';
   try{
     await loadCanonTexts();
-    allNodes=await loadSharedGraph();
+    const graph=await loadSharedGraph();
+    allNodes=graph.nodes;
     renderStats(); renderTable();
-    showToast(`Loaded ${allNodes.length} nodes`,"ok");
+    let msg=`Loaded ${allNodes.length} nodes`;
+    if(graph.store) msg+=` (${graph.store})`;
+    if(graph.store==="ephemeral"){
+      showToast("Shared store is ephemeral — set Upstash Redis or nodes won't persist.","err");
+    }else if(!allNodes.length && graph.note){
+      showToast(graph.note,"err");
+    }else{
+      showToast(msg,"ok");
+    }
   }catch(e){
     console.error(e);
     document.querySelector("#loreTable tbody").innerHTML=`<tr><td colspan="8" class="loading" style="color:var(--bad)">Error: ${escapeHtml(e.message)}</td></tr>`;

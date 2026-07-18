@@ -145,10 +145,21 @@ const game = createGame({
     const out = await callLLMProxy(system, user, maxTokens);
     return out.content;
   },
-  onDebug: (msg) => dbgEvent(msg)
+  onDebug: (msg) => dbgEvent(msg),
+  // batch commits in one turn into a single POST (genStep may commit many times)
+  onLoreCommit: () => { schedulePushLore(); }
 });
 
 /* ---- shared-lore network (stays in thin view) ---- */
+let pushQueued = null;
+function schedulePushLore() {
+  if (pushQueued) return pushQueued;
+  pushQueued = Promise.resolve()
+    .then(() => pushLore())
+    .finally(() => { pushQueued = null; });
+  return pushQueued;
+}
+
 async function pushLore() {
   const nodes = game.listContributions();
   if (!nodes.length) {
@@ -168,13 +179,25 @@ async function pushLore() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ world: WORLD_ID, nodes: clean })
     });
-    if (!r.ok) {
-      dbgEvent("lore: push failed HTTP " + r.status);
-      return { ok: false, pushed: 0, skipped, why: "server rejected (" + r.status + ")" };
-    }
     const d = await r.json().catch(() => ({}));
-    dbgEvent("lore: push ok merged=" + (d.merged != null ? d.merged : pushed) + (skipped ? (" skipped=" + skipped) : ""));
-    return { ok: true, pushed, skipped, merged: d.merged || pushed, note: d.note || "" };
+    if (!r.ok) {
+      const why = d.why || ("HTTP " + r.status);
+      dbgEvent("lore: push failed — " + why + (d.note ? (" (" + d.note + ")") : ""));
+      if (d.why === "no_durable_store") {
+        toast("Shared lore not persisted — configure Upstash Redis on the server.", "err");
+      }
+      return { ok: false, pushed: 0, skipped, why, note: d.note || "" };
+    }
+    const merged = d.merged != null ? d.merged : 0;
+    const rejected = d.rejected || 0;
+    dbgEvent("lore: push ok merged=" + merged + " rejected=" + rejected + (skipped ? (" clientSkipped=" + skipped) : ""));
+    for (const rej of (d.rejections || []).slice(0, 5)) {
+      dbgEvent("lore: rejected " + (rej.id || "?") + " — " + (rej.why || ""));
+    }
+    if (merged === 0 && rejected > 0) {
+      toast("Shared lore rejected " + rejected + " fact(s) — see Debug.", "warn");
+    }
+    return { ok: true, pushed, skipped, merged, rejected, note: d.note || "" };
   } catch (e) {
     dbgEvent("lore: push unreachable");
     return { ok: false, pushed: 0, skipped, why: "network error (offline floor intact)" };
@@ -294,13 +317,12 @@ async function playerTurn(text) {
         game.appendLog("The gray offers no answer you can trust.", "sys");
         toast("Lore generation failed or empty.", "warn");
       }
-      await pushLore();
-    } else if (res.lore) {
-      await pushLore();
     }
     if (game.isOver()) showEndFromGame();
   }
 
+  // flush shared push (onLoreCommit may have queued one; always await so journal → admin)
+  await (pushQueued || pushLore());
   game.patchLastLog("you", { debug: turnDebug });
   turnDebug = null;
   if (!game.isOver()) render();

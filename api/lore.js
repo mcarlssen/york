@@ -124,9 +124,14 @@ async function validateNode(n, doc) {
   // never accept 'spec'/'shared' sources from a client — they are server-assigned
   if (n.source === "spec" || n.source === "shared" || n.source === "canonical")
     return "forbidden source label";
-  // primary: semantic contradiction against the established world
-  const sem = await semanticConflict(n.text, canonContext(doc));
-  if (sem && sem.conflict) return `contradicts the world's established canon (${sem.why})`;
+  const tags = Array.isArray(n.tags) ? n.tags : [];
+  // player-state facts (clothing/held) are not world-ecology claims — skip semantic LLM
+  // (it false-rejects them); still run the keyword heuristic.
+  const playerState = tags.includes("player") || tags.includes("state");
+  if (!playerState) {
+    const sem = await semanticConflict(n.text, canonContext(doc));
+    if (sem && sem.conflict) return `contradicts the world's established canon (${sem.why})`;
+  }
   // offline fallback: coarse keyword heuristic when no LLM is configured
   const bad = forbiddenTerms(doc).find(t => n.text.toLowerCase().includes(t));
   if (bad) return `contradicts the world's ecology/identity constraints ("${bad}")`;
@@ -205,11 +210,24 @@ async function readGraph(world) {
 
 async function writeGraph(graph) {
   const r = await getRedis();
-  if (r) { await r.set(STORE_KEY(graph.world), graph); return; }
+  if (r) { await r.set(STORE_KEY(graph.world), graph); return { store: "redis" }; }
+  // Vercel lambdas have ephemeral disks — a write here is invisible to the next request.
+  if (process.env.VERCEL) {
+    const err = new Error("no_durable_store");
+    err.code = "no_durable_store";
+    throw err;
+  }
   const all = existsSync(LOCAL_FILE) ? JSON.parse(readFileSync(LOCAL_FILE, "utf8")) : {};
   all[graph.world] = graph;
   mkdirSync(dirname(LOCAL_FILE), { recursive: true });
   writeFileSync(LOCAL_FILE, JSON.stringify(all, null, 2));
+  return { store: "file" };
+}
+
+async function storeKind() {
+  if (await getRedis()) return "redis";
+  if (process.env.VERCEL) return "ephemeral";
+  return existsSync(LOCAL_FILE) ? "file" : "empty";
 }
 
 // de-dup: same id, or near-identical text, is treated as already present
@@ -233,7 +251,13 @@ export default async function handler(req, res) {
 
   if (req.method === "GET" && path === "/api/lore") {
     const g = await readGraph(world);
-    return res.status(200).json({ world, nodes: g.nodes, edges: g.edges || [], count: g.nodes.length });
+    const store = await storeKind();
+    return res.status(200).json({
+      world, nodes: g.nodes, edges: g.edges || [], count: g.nodes.length, store,
+      note: store === "ephemeral"
+        ? "No durable store configured (set UPSTASH_REDIS_REST_URL/_TOKEN). Writes will not persist on Vercel."
+        : undefined,
+    });
   }
 
   if (req.method === "POST" && path === "/api/lore") {
@@ -262,11 +286,26 @@ export default async function handler(req, res) {
       });
       merged++;
     }
-    if (merged) { g.edges = g.edges || []; await writeGraph(g); }
+    if (merged) {
+      g.edges = g.edges || [];
+      try {
+        await writeGraph(g);
+      } catch (e) {
+        if (e && e.code === "no_durable_store") {
+          return res.status(503).json({
+            ok: false, merged: 0, rejected, rejections: rejections.slice(0, 20),
+            why: "no_durable_store",
+            note: "Set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN — Vercel has no persistent filesystem.",
+          });
+        }
+        throw e;
+      }
+    }
     return res.status(200).json({
       ok: true, merged, rejected,
       note: rejected ? `${rejected} node(s) rejected by the ruleset` : "all accepted",
       rejections: rejections.slice(0, 20),
+      store: await storeKind(),
     });
   }
 
