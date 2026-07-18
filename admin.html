@@ -155,7 +155,7 @@ const sessionAccepted = new Set();
 const sessionRejected = new Set();
 
 // --- Helpers ---
-function escapeHtml(s){ return String(s).replace(/[&<>"]/g,c=>({"&":"&","<":"<",">":">",'"':"""}[c])); }
+function escapeHtml(s){ return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 function normText(s){ return (s||"").toLowerCase().replace(/[^a-z0-9 ]/g," ").replace(/\s+/g," ").trim(); }
 function similar(a,b){
   const na=normText(a), nb=normText(b);

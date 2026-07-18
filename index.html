@@ -265,7 +265,8 @@ function seedLore(g, doc){
    from all players; new players bootstrap from it. CANONICAL
    (world.json in repo) is curated by a human; the LLM/players
    never write it. Only the curator promotes vetted shared facts.
-   Push/pull are best-effort; the offline floor is unchanged.
+   Discoveries push immediately via commitLore → pushLore (best-effort);
+   session-end autoContribute retries anything that missed. Offline floor intact.
    ============================================================ */
 const API_BASE = (typeof window!=="undefined" && window.YORK_API_BASE) || "/api";
 
@@ -308,14 +309,10 @@ async function pushLore(){
       headers:{"Content-Type":"application/json"},
       body: JSON.stringify({ world:WORLD_ID, nodes:clean })
     });
-    if(!r.ok){
-      toast("Share failed ("+r.status+").","err");
-      return { ok:false, pushed:0, skipped, why:"server rejected ("+r.status+")" };
-    }
+    if(!r.ok) return { ok:false, pushed:0, skipped, why:"server rejected ("+r.status+")" };
     const d = await r.json().catch(()=>({}));
     return { ok:true, pushed: pushed, skipped: skipped, merged: d.merged||pushed, note:d.note||"" };
   }catch(e){
-    toast("Share unreachable — local lore kept.","warn");
     return { ok:false, pushed:0, skipped, why:"network error (offline floor intact)" };
   }
 }
@@ -339,10 +336,8 @@ async function pullLore(){
   }catch(e){ return { ok:false, why:"network error (using local + spec seed)" }; }
 }
 
-// Automatic contribution: at session end, push this session's discoveries to the
-// shared world (best-effort, silent). pushLore early-returns when there's nothing
-// new, so this costs at most one Redis write per played session. The offline floor
-// is untouched — if the server is unreachable, local memory is preserved.
+// End-of-session flush: retries any discoveries that failed to push mid-play.
+// Primary path is commitLore → pushLore (immediate). Offline floor unchanged.
 async function autoContribute(){
   const r = await pushLore();
   if(r.ok && r.pushed>0){
@@ -741,6 +736,8 @@ function commitLore(key, fact, opts){
   LORE.commit(key, "is", fact, { source:"play", tags: opts.tags||["discovered"], turn: S.clock,
     id: stableId, text: opts.text || fact });
   persistLore();
+  // push immediately so admin/curators see it without waiting for session end
+  pushLore();
 }
 
 function endGame(kind){
