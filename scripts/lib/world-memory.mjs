@@ -147,6 +147,71 @@ export function isCraftTakeTarget(t) {
   return /\b(fill|make|craft|wear|tie|wrap|sew|stuff|swing|wield)\b/.test(s);
 }
 
+/** Site recipe builds — not freestyle improvise. */
+export function isSiteBuild(text) {
+  return /\b(build|craft)\s+(?:a\s+|the\s+)?(raft|pyre|shelter|balloon)\b/i.test(String(text || ""));
+}
+
+/**
+ * Freestyle craft / assemble intent (club, lash, bind).
+ * Excludes site builds and "make signal".
+ */
+export function isImproviseIntent(text) {
+  const t = String(text || "").toLowerCase();
+  if (!t.trim()) return false;
+  if (isSiteBuild(t)) return false;
+  if (/\b(make|build)\s+signal\b/.test(t)) return false;
+  if (/\b(make|improvise|fashion|lash|tie|bind|affix)\b/.test(t)) return true;
+  if (/\bcraft\b/.test(t)) return true;
+  if (/\buse\b[\s\S]{0,100}\bto\b[\s\S]{0,60}\b(tie|lash|bind|make|attach|affix|fix|secure)\b/.test(t)) return true;
+  if (/\b(make|craft|fashion)\b[\s\S]{0,80}\b(with|from|using)\b/.test(t)) return true;
+  return false;
+}
+
+/** Parse improvise pass/fail JSON (incl. light salvage). */
+export function salvageImproviseJSON(raw) {
+  if (!raw) return null;
+  const full = extractJSON(raw);
+  if (full && typeof full.ok === "boolean") {
+    const result =
+      full.result && (full.result.id || full.result.name)
+        ? {
+            id: String(full.result.id || full.result.name)
+              .toLowerCase()
+              .replace(/[^a-z0-9]+/g, "_")
+              .replace(/^_|_$/g, ""),
+            name: String(full.result.name || full.result.id),
+            desc: full.result.desc ? String(full.result.desc) : undefined,
+          }
+        : null;
+    return {
+      ok: !!full.ok,
+      answer: full.answer ? String(full.answer) : "",
+      result: result && result.id ? result : null,
+      consume: Array.isArray(full.consume) ? full.consume.map(String) : [],
+      playerFacts: Array.isArray(full.playerFacts) ? full.playerFacts.map(String) : [],
+      why: full.why != null ? String(full.why) : null,
+    };
+  }
+  const s = String(raw);
+  const okM = s.match(/"ok"\s*:\s*(true|false)/);
+  if (!okM) return null;
+  const answerM = s.match(/"answer"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+  const idM = s.match(/"id"\s*:\s*"([^"]+)"/);
+  const nameM = s.match(/"name"\s*:\s*"([^"]+)"/);
+  return {
+    ok: okM[1] === "true",
+    answer: answerM ? answerM[1].replace(/\\"/g, '"') : "",
+    result:
+      idM && okM[1] === "true"
+        ? { id: idM[1], name: nameM ? nameM[1] : idM[1], desc: undefined }
+        : null,
+    consume: [],
+    playerFacts: [],
+    why: null,
+  };
+}
+
 /**
  * Simple multi-take targets ("fig and bamboo"), or null if this is one craft/compound act.
  * Single item → [item]. Empty → [].
