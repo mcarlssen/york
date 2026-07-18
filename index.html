@@ -28,9 +28,12 @@
       <div id="input">
         <input id="cmd" placeholder="what do you do?" />
         <button id="go">Say</button>
-        <button id="copyChat" title="Copy chat log to clipboard" aria-label="Copy chat log">
+        <button id="copyChat" class="icon-btn" title="Copy chat log to clipboard" aria-label="Copy chat log">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" aria-hidden="true"><path d="M360 160L280 160C266.7 160 256 149.3 256 136C256 122.7 266.7 112 280 112L360 112C373.3 112 384 122.7 384 136C384 149.3 373.3 160 360 160zM360 208C397.1 208 427.6 180 431.6 144L448 144C456.8 144 464 151.2 464 160L464 512C464 520.8 456.8 528 448 528L192 528C183.2 528 176 520.8 176 512L176 160C176 151.2 183.2 144 192 144L208.4 144C212.4 180 242.9 208 280 208L360 208zM419.9 96C407 76.7 385 64 360 64L280 64C255 64 233 76.7 220.1 96L192 96C156.7 96 128 124.7 128 160L128 512C128 547.3 156.7 576 192 576L448 576C483.3 576 512 547.3 512 512L512 160C512 124.7 483.3 96 448 96L419.9 96z"/></svg>
         </button>
+        <a id="adminLink" class="icon-btn" href="admin.html" title="Lore curation dashboard" aria-label="Lore curation dashboard">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" aria-hidden="true"><path d="M385.2 201.9C387.7 195.9 393.5 192 400 192L440 192L440 168C440 154.7 429.3 144 416 144L318 144C319.3 149.1 320 154.5 320 160L320 224C320 259.3 291.3 288 256 288L160 288C124.7 288 96 259.3 96 224L96 160C96 124.7 124.7 96 160 96L416 96C455.8 96 488 128.2 488 168L488 192L528 192C534.5 192 540.3 195.9 542.8 201.9C545.3 207.9 543.9 214.8 539.3 219.3L475.3 283.3C469.1 289.5 458.9 289.5 452.7 283.3L388.7 219.3C384.1 214.7 382.8 207.8 385.2 201.9zM480 416L160 416L160 480L480 480L480 416zM544 480C544 515.3 515.3 544 480 544L160 544C124.7 544 96 515.3 96 480L96 416C96 380.7 124.7 352 160 352L480 352C515.3 352 544 380.7 544 416L544 480z"/></svg>
+        </a>
       </div>
       <div id="thinking" class="thinking" style="display:none"></div>
       <div id="log"></div>
@@ -65,7 +68,8 @@
 
 <script type="module">
 import {
-  salvageLoreJSON, isJsonDump, captureWorldDelta, applyWorldDelta, placeCatalogMentions, extractJSON as extractJSONLib
+  salvageLoreJSON, isJsonDump, captureWorldDelta, applyWorldDelta, placeCatalogMentions, extractJSON as extractJSONLib,
+  isCraftTakeTarget, splitSimpleTakeTargets, normalizeItemTarget, shouldHoldEntity, collectPlayerFacts
 } from "./scripts/lib/world-memory.mjs";
 
 "use strict";
@@ -116,7 +120,7 @@ const WORLD_DOC = {
   map: {
     start:"beach", max_clock:16,
     nodes: {
-      beach:      { name:"Shingle Beach", desc:"Where the sea spat you out. The Meridian lies broken on the reef, a hundred yards out. The jungle waits inland; the cove and your camp sit along the shore.", exits:{ west:"tide_pools", north:"jungle", east:"wreck_shore", up:"cliff", south:"cove", south_east:"camp" }, items:["driftwood","debris"] },
+      beach:      { name:"Shingle Beach", desc:"Where the sea spat you out. The Meridian lies broken on the reef, a hundred yards out. The jungle waits inland; the cove and your camp sit along the shore.", exits:{ west:"tide_pools", north:"jungle", east:"wreck_shore", up:"cliff", south:"cove", south_east:"camp" }, items:["driftwood","debris","pebbles"] },
       wreck_shore:{ name:"Wreck Shore", desc:"At low light you can wade toward the Meridian's hull. She is breaking up fast.", exits:{ west:"beach" }, salvage:true },
       tide_pools: { name:"Tide Pools", desc:"Rock pools thick with crabs and shellfish; a seep of fresh water filters down.", exits:{ east:"beach" }, items:["crab","fresh_water"], forage:"food" },
       jungle:     { name:"Jungle Interior", desc:"Close, green, loud with birds. Feral goats browse; something with yellow eyes watches from the figs.", exits:{ south:"beach", east:"spring", north:"cliff" }, items:["goat_meat","fig","bamboo"], cat_home:true },
@@ -441,8 +445,8 @@ function registerItem(id, name, desc, tags, opts){
   return WORLD.items[id];
 }
 
-// Apply structured lore entities (portable → location items). Rejects meta strings.
-function applyEntities(entities){
+// Apply structured lore entities (portable → location or inventory). Rejects meta strings.
+function applyEntities(entities, playerQuery){
   const n = node();
   if(!n.items) n.items = [];
   for(const e of (entities||[])){
@@ -452,13 +456,26 @@ function applyEntities(entities){
     if(/constraint|concise|factual|magic|volcanic|should mention|need to keep/i.test(e.name+" "+(e.desc||""))) continue;
     const portable = e.portable!==false;
     registerItem(id, e.name, e.desc||("You notice "+e.name+" here."), ["generated","lore"], {portable});
-    if(portable && !n.items.includes(id) && !hasItem(id)) n.items.push(id);
+    if(!portable) continue;
+    if(shouldHoldEntity(e, playerQuery)){
+      if(!hasItem(id)) S.inv.push(id);
+      const ix = n.items.indexOf(id); if(ix>=0) n.items.splice(ix,1);
+    } else if(!n.items.includes(id) && !hasItem(id)){
+      n.items.push(id);
+    }
   }
 }
 // Bridge: prose/facts that name catalog items make them takeable here.
 function bridgeLoreToItems(texts){
   const n = node();
   n.items = placeCatalogMentions(WORLD.items, n.items||[], S.inv, (texts||[]).filter(Boolean).join(" "));
+}
+function commitPlayerFacts(lore){
+  for(const f of collectPlayerFacts(lore)){
+    if(validateFactClient(f)) continue;
+    const id = "player_"+f.toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"").slice(0,48);
+    commitLore("player:"+id, f, { id, tags:["player","state","generated"], text:f });
+  }
 }
 
 /* ---- resolve a natural-language direction/target to an exit key ---- */
@@ -571,20 +588,26 @@ function doGo(t){
 }
 
 function matchItem(here, tgt){
-  const t=singularize(String(tgt).toLowerCase().replace(/_/g," ").trim());
+  const t=normalizeItemTarget(tgt);
+  const tSing=singularize(t);
   return here.find(i=>{
     if(hasItem(i)) return false;
     const n=itemName(i).toLowerCase();
     const id=i.replace(/_/g," ");
-    return i===t || id===t || singularize(n)===t || n.includes(t) || t.includes(singularize(n)) ||
-      i.includes(t.replace(/ /g,"_")) || singularize(id)===t;
+    return i===t || i===tSing || id===t || id===tSing || singularize(n)===tSing || n.includes(tSing) || t.includes(singularize(n)) ||
+      i.includes(t.replace(/ /g,"_")) || singularize(id)===tSing;
   });
 }
 function doTake(t){
   if(!t) return {ok:false, text:"Take what?"};
-  // multi-take: "fig and bamboo" / "fig, bamboo"
-  const parts = String(t).split(/\s+and\s+|,\s*/).map(x=>x.trim()).filter(Boolean);
-  if(parts.length>1){
+  const raw = String(t).trim();
+  // craft / compound body acts → lore gen (establish held items + playerFacts)
+  if(isCraftTakeTarget(raw) || splitSimpleTakeTargets(raw)===null){
+    return {ok:true, text:"You set to work.", cls:"fog", pendingGen:{type:"lore", query:
+      "Player does this now: "+raw+". Narrate the result. If they craft or hold something, include it in entities with portable:true and held:true. If clothing/body state changes, include playerFacts (e.g. \"you are wearing one sock\")."}};
+  }
+  const parts = splitSimpleTakeTargets(raw);
+  if(parts && parts.length>1){
     const got=[], miss=[];
     for(const p of parts){
       const r=doTake(p);
@@ -594,8 +617,14 @@ function doTake(t){
     return {ok:false, text:`There is none of that here to take.`, cls:"warn"};
   }
   const n=node();
-  const it=matchItem((n.items||[]), t);
-  if(!it) return {ok:false, text:`There is no ${t} here to take.`, cls:"warn"};
+  // alias: flail / sock weapon → already-held or ground pebble sock
+  const alias = normalizeItemTarget(raw);
+  if(/\b(flail|sock)\b/.test(alias)){
+    const held = S.inv.find(i=>/sock|flail|pebble/i.test(i+" "+itemName(i)));
+    if(held) return {ok:true, text:`You already have the ${itemName(held)}.`, cls:"good"};
+  }
+  const it=matchItem((n.items||[]), raw);
+  if(!it) return {ok:false, text:`There is no ${normalizeItemTarget(raw)||raw} here to take.`, cls:"warn"};
   S.inv.push(it); tick(); ageWreck(1);
   return {ok:true, text:`You take the ${itemName(it)}.`, cls:"good"};
 }
@@ -863,6 +892,9 @@ function offlineParse(text){
 
   if(/\b(wait|rest|sleep|pass time|hold)\b/.test(t)) return one("wait");
 
+  const putInv = t.match(/\b(?:put|place|stow)\s+(.+?)\s+in\s+(?:my\s+)?(?:inventory|pack|bag|pocket)\b/);
+  if(putInv) return one("take", putInv[1].replace(/^(the|a|an|my)\s+/,"").trim());
+
   return one("ask", "intent", null, text);
 }
 
@@ -972,11 +1004,12 @@ async function genLore(text){
   const here = (node().items||[]).filter(i=>!hasItem(i)).map(itemName).join(", ")||"none listed";
   const sys = `World-builder for an equatorial castaway island (reef, palms, mangroves, goats, seabirds, jungle cats, parrots, sharks).
 Reply ONLY with JSON (no markdown, no reasoning):
-{"answer":"one vivid factual sentence answering the player","facts":["optional short lore facts"],"entities":[{"id":"snake_case","name":"display name","portable":true|false,"desc":"one short line"}]}
-Rules: no cold/volcanic life, no magic. Entities only if visible/usable at the current place. portable=true only for things the player could pick up. Keep JSON complete and short.
+{"answer":"one vivid factual sentence","facts":["optional short world lore"],"playerFacts":["optional durable facts about the player's body/clothing/held state"],"entities":[{"id":"snake_case","name":"display name","portable":true|false,"held":true|false,"desc":"one short line"}]}
+Rules: no cold/volcanic life, no magic. Entities only if visible/usable now. portable=true for pickups. held:true when the player is making, wearing, wielding, or already holding it (goes to inventory, not the ground). playerFacts for clothing/body/held state the game must remember (e.g. "you are wearing one sock"). Keep JSON complete and short.
 CONSTRAINTS: ${SPEC.constraints.join(" ")}
 PLACE: ${node().name}
 VISIBLE: ${here}
+INVENTORY: ${S.inv.map(itemName).join(", ")||"empty"}
 LORE:\n${relevant||"(none)"}
 RECENT:\n${recent||"(none)"}`;
   const c = await llmText(sys, text, 450);
@@ -990,7 +1023,7 @@ RECENT:\n${recent||"(none)"}`;
   }
   if(isJsonDump(c)) return null;
   const cleaned = cleanGeneration(c);
-  return cleaned ? {answer:cleaned, facts:[], entities:[]} : null;
+  return cleaned ? {answer:cleaned, facts:[], playerFacts:[], entities:[]} : null;
 }
 
 async function genEmergent(query){
@@ -1086,7 +1119,7 @@ async function runPendingGen(pending){
     setThinking(true, "the voice weaves the world…");
     const out = await genLore(pending.query);
     setThinking(false);
-    if(out && (out.answer || (out.entities && out.entities.length) || (out.facts && out.facts.length))){
+    if(out && (out.answer || (out.entities && out.entities.length) || (out.facts && out.facts.length) || (out.playerFacts && out.playerFacts.length))){
       if(out.answer){
         pushLog(out.answer, "llm");
         commitLore("gen:"+(LORE.seq+1), out.answer, {tags:["generated","lore"], text:out.answer});
@@ -1095,9 +1128,11 @@ async function runPendingGen(pending){
         if(!f || validateFactClient(f)) continue;
         commitLore("gen:"+(LORE.seq+1), f, {tags:["generated","lore"], text:f});
       }
-      applyEntities(out.entities);
+      commitPlayerFacts(out);
+      applyEntities(out.entities, pending.query);
       bridgeLoreToItems([out.answer].concat(out.facts||[]));
       saveState();
+      render();
     } else {
       pushLog("The gray offers no answer you can trust.","sys");
       toast("Lore generation failed or empty.","warn");

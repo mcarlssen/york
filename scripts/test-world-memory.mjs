@@ -7,6 +7,11 @@ import {
   captureWorldDelta,
   applyWorldDelta,
   placeCatalogMentions,
+  isCraftTakeTarget,
+  splitSimpleTakeTargets,
+  normalizeItemTarget,
+  shouldHoldEntity,
+  collectPlayerFacts,
 } from "./lib/world-memory.mjs";
 
 let pass = 0, fail = 0;
@@ -93,6 +98,26 @@ function ok(cond, name) {
   ok(restored.nodes.beach.items.includes("driftwood"), "restore beach items");
   ok(!!restored.nodes.hidden_cove, "restore generated place");
   ok(restored.nodes.beach.exits.discover_cove === "hidden_cove", "restore exit");
+}
+
+// --- craft take must not multi-split (sock flail transcript) -----------------
+{
+  ok(isCraftTakeTarget("off a sock, and fill it with a handful of pebbles"),
+    "take off + fill is craft");
+  ok(splitSimpleTakeTargets("off a sock, and fill it with a handful of pebbles") === null,
+    "craft target does not multi-split");
+  ok(JSON.stringify(splitSimpleTakeTargets("fig and bamboo")) === JSON.stringify(["fig", "bamboo"]),
+    "simple multi-take still splits");
+  ok(normalizeItemTarget("a bag of pebbles from the shingle") === "pebbles",
+    "normalize bag of pebbles");
+  ok(shouldHoldEntity({ held: true }, ""), "held:true → inventory");
+  ok(shouldHoldEntity({ portable: true }, "i swing the sock like a weapon"),
+    "swing weapon query → hold");
+  const pf = collectPlayerFacts({
+    answer: "You're wearing one sock — the other is a pebble-filled pouch.",
+    playerFacts: ["you are wearing one sock"],
+  });
+  ok(pf.some(f => /wearing one sock/i.test(f)), "playerFacts collected + inferred");
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

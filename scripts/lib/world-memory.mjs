@@ -9,6 +9,7 @@ export function salvageLoreJSON(raw) {
     return {
       answer: String(full.answer),
       facts: Array.isArray(full.facts) ? full.facts.map(String) : [],
+      playerFacts: Array.isArray(full.playerFacts) ? full.playerFacts.map(String) : [],
       entities: Array.isArray(full.entities) ? full.entities : [],
     };
   }
@@ -34,7 +35,21 @@ export function salvageLoreJSON(raw) {
       desc: m[4] ? m[4].replace(/\\"/g, '"') : undefined,
     });
   }
-  return { answer, facts, entities };
+  // held flags on truncated entities
+  for (const e of entities) {
+    const heldM = s.match(
+      new RegExp('"id"\\s*:\\s*"' + e.id + '"[\\s\\S]{0,120}"held"\\s*:\\s*(true|false)')
+    );
+    if (heldM) e.held = heldM[1] === "true";
+  }
+  const playerFacts = [];
+  const pfM = s.match(/"playerFacts"\s*:\s*\[([\s\S]*?)(?:\]|$)/);
+  if (pfM) {
+    for (const m of pfM[1].matchAll(/"((?:[^"\\]|\\.)*)"/g)) {
+      playerFacts.push(m[1].replace(/\\"/g, '"'));
+    }
+  }
+  return { answer, facts, playerFacts, entities };
 }
 
 export function extractJSON(raw) {
@@ -122,5 +137,76 @@ export function placeCatalogMentions(itemsCatalog, nodeItems, inv, text) {
     const reName = new RegExp("\\b" + name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b");
     if (re.test(blob) || reName.test(blob)) out.push(id);
   }
+  return out;
+}
+
+/** Craft / body actions must not go through multi-take ("take off X, and fill…"). */
+export function isCraftTakeTarget(t) {
+  const s = String(t || "").toLowerCase().trim();
+  if (/^off\b/.test(s)) return true;
+  return /\b(fill|make|craft|wear|tie|wrap|sew|stuff|swing|wield)\b/.test(s);
+}
+
+/**
+ * Simple multi-take targets ("fig and bamboo"), or null if this is one craft/compound act.
+ * Single item → [item]. Empty → [].
+ */
+export function splitSimpleTakeTargets(t) {
+  const raw = String(t || "").trim();
+  if (!raw) return [];
+  if (isCraftTakeTarget(raw)) return null;
+  const parts = raw.split(/\s+and\s+|,\s*/).map((x) => x.trim()).filter(Boolean);
+  if (parts.length <= 1) return parts;
+  if (
+    parts.every(
+      (p) => p.split(/\s+/).length <= 4 && !/\b(fill|make|off|with|from|into|wear)\b/i.test(p)
+    )
+  ) {
+    return parts;
+  }
+  return null;
+}
+
+/** Strip quantity / source fluff so "bag of pebbles from the shingle" → "pebbles". */
+export function normalizeItemTarget(t) {
+  return String(t || "")
+    .toLowerCase()
+    .replace(/_/g, " ")
+    .replace(/^(a|an|the|some|my)\s+/, "")
+    .replace(/\b(bag|handful|piece|pile|bunch|few|lot|armful)\s+(of\s+)?/g, "")
+    .replace(/\s+from\s+.+$/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Crafted / wielded entities go to inventory, not the ground. */
+export function shouldHoldEntity(entity, playerQuery) {
+  if (entity && (entity.held === true || entity.held === "true")) return true;
+  const q = String(playerQuery || "").toLowerCase();
+  return /\b(take off|fill|make|craft|swing|wield|wear|hold|carry|in my (hand|grip|inventory|pack|bag)|put .+ in my|flail|weapon)\b/.test(
+    q
+  );
+}
+
+/** Pull playerFacts from structured lore; also infer from "you are wearing…" prose. */
+export function collectPlayerFacts(lore) {
+  const out = [];
+  const seen = new Set();
+  function add(s) {
+    const t = String(s || "").trim();
+    if (!t || t.length < 8 || t.length > 200) return;
+    const k = t.toLowerCase();
+    if (seen.has(k)) return;
+    seen.add(k);
+    out.push(t);
+  }
+  for (const f of (lore && lore.playerFacts) || []) add(f);
+  const blob = [lore && lore.answer]
+    .concat((lore && lore.facts) || [])
+    .filter(Boolean)
+    .join(" ");
+  const re =
+    /\b(?:you(?:'re| are| were)|you(?:'ve| have))\s+(?:wearing|holding|carrying|holding onto)[^.?!]+[.?!]?/gi;
+  for (const m of blob.matchAll(re)) add(m[0].trim());
   return out;
 }
