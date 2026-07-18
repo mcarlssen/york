@@ -23,6 +23,7 @@ function defaultStorage() {
 let _storage = defaultStorage();
 let _llm = null;
 let _onDebug = null;
+let _onLoreCommit = null;
 let _arm = "full";
 let _harvest = [];
 let _loreStats = { retrieved: 0, generated: 0, entitiesAdded: 0, placesAdded: 0 };
@@ -654,6 +655,7 @@ function commitLore(key, fact, opts){
     id: stableId, text });
   persistLore();
   debugEvent("lore: commit "+stableId+" — "+String(text).slice(0,120));
+  if(_onLoreCommit) try{ _onLoreCommit(); }catch(e){}
 }
 
 function endGame(kind){
@@ -981,6 +983,7 @@ export function createGame(opts = {}) {
   _arm = opts.arm || "full";
   _llm = opts.llm || null;
   _onDebug = typeof opts.onDebug === "function" ? opts.onDebug : null;
+  _onLoreCommit = typeof opts.onLoreCommit === "function" ? opts.onLoreCommit : null;
   _harvest = [];
   _loreStats = { retrieved: 0, generated: 0, entitiesAdded: 0, placesAdded: 0 };
 
