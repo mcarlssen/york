@@ -1,11 +1,18 @@
 /* Styling — colors, typography, borders, visual effects */
+@font-face{
+  font-family:"Geist Pixel Circle";
+  src:url("../fonts/GeistPixel-Circle.woff2") format("woff2");
+  font-weight:100 900;
+  font-style:normal;
+  font-display:swap;
+}
 :root{
   --bg:#06100c; --ink:#7dffb0; --dim:#3f7a5d; --bad:#ff6b6b; --warn:#ffd166; --banner:#d9b256;
   --good:#9bffce; --fog:#9bb7ff; --panel:#0a1812; --line:#16352a; --key:#c08bff;
 }
 body{
   background:var(--bg); color:var(--ink);
-  font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace;
+  font-family:"Geist Pixel Circle","SF Mono",ui-monospace,Menlo,Consolas,monospace;
   font-size:14px; line-height:1.45;
   background-image:repeating-linear-gradient(0deg,rgba(125,255,176,.035) 0 1px,transparent 1px 3px);
 }
