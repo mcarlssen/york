@@ -139,6 +139,17 @@ export { validateNode, semanticConflict, forbiddenTerms, canonContext };
 // returns { content: null } so the engine falls back to its offline parser.
 // Endpoint / apiKeyEnv / model come from Redis admin config (see /api/llm-config).
 // Returns { content, status, code }. status: ok | empty | rate_limit | server_error | no_key
+function summarizeUpstreamError(raw) {
+  if (!raw) return "";
+  const s = String(raw).slice(0, 300);
+  try {
+    const j = JSON.parse(s);
+    const msg = (j.error && (j.error.message || j.error)) || j.message || j.why;
+    if (typeof msg === "string" && msg.trim()) return msg.trim().slice(0, 200);
+  } catch { /* plain text */ }
+  return s.replace(/\s+/g, " ").trim().slice(0, 200);
+}
+
 async function callChatCompletions(system, user, maxTokens) {
   const rdb = await getRedis();
   const stored = await readLlmConfig(rdb);
@@ -154,12 +165,22 @@ async function callChatCompletions(system, user, maxTokens) {
       ] }),
     });
     if (r.status === 429) return { content: null, status: "rate_limit", code: 429 };
-    if (!r.ok) return { content: null, status: "server_error", code: r.status };
+    if (!r.ok) {
+      const detail = summarizeUpstreamError(await r.text().catch(() => ""));
+      return { content: null, status: "server_error", code: r.status, detail, endpointUrl, model };
+    }
     const d = await r.json();
     const content = (d.choices && d.choices[0] && d.choices[0].message && (d.choices[0].message.content || "")) || null;
     return { content, status: content ? "ok" : "empty", code: r.status };
-  } catch {
-    return { content: null, status: "server_error", code: 0 };
+  } catch (e) {
+    return {
+      content: null,
+      status: "server_error",
+      code: 0,
+      detail: (e && e.message) ? String(e.message).slice(0, 200) : "fetch failed",
+      endpointUrl,
+      model,
+    };
   }
 }
 
@@ -289,7 +310,14 @@ export default async function handler(req, res) {
     const out = await callChatCompletions(body.system, body.user, body.maxTokens);
     if (out.status === "rate_limit") return res.status(429).json({ ok: false, content: null, why: "rate_limit" });
     if (out.status === "no_key") return res.status(503).json({ ok: false, content: null, why: "no_key" });
-    if (out.status === "server_error") return res.status(502).json({ ok: false, content: null, why: "upstream", code: out.code });
+    if (out.status === "server_error") {
+      return res.status(502).json({
+        ok: false, content: null, why: "upstream", code: out.code,
+        detail: out.detail || undefined,
+        endpointUrl: out.endpointUrl || undefined,
+        model: out.model || undefined,
+      });
+    }
     return res.status(200).json({ ok: true, content: out.content });
   }
 

@@ -88,10 +88,10 @@
 
   <section class="llm-panel" id="llmPanel" aria-labelledby="llmHeading">
     <h2 id="llmHeading">LLM Router</h2>
-    <p class="llm-hint">Endpoint URL, which Vercel <code>*_API_KEY</code> to use, and one model for player + lore validation. Key <em>values</em> stay in env — never pasted here.</p>
+    <p class="llm-hint">Full chat-completions URL (not just the <code>/v1</code> base). Key <em>values</em> stay in env — never pasted here. Model IDs are provider-specific.</p>
     <div class="llm-form">
       <label>Endpoint URL
-        <input type="url" id="llmEndpoint" placeholder="https://openrouter.ai/api/v1/chat/completions" autocomplete="off" />
+        <input type="url" id="llmEndpoint" placeholder="https://api.tokenrouter.com/v1/chat/completions" autocomplete="off" />
       </label>
       <label>API key env
         <select id="llmApiKeyEnv"></select>
