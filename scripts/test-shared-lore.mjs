@@ -194,7 +194,7 @@ function ok(cond, name) { if (cond) { pass++; console.log("  PASS", name); } els
   delete process.env.TOKENROUTER_API_KEY;
 }
 
-// --- 7d. DELETE tombstones shared lore ------------------------------------
+// --- 7d. reject/tombstone shared lore (DELETE or POST op:reject) ------------
 {
   const del = mkRes();
   await handler(mkReq("DELETE", "http://x/api/lore?world=meridian", {
@@ -224,7 +224,7 @@ function ok(cond, name) { if (cond) { pass++; console.log("  PASS", name); } els
   ok(/tombstoned/.test((rePush.body.rejections && rePush.body.rejections[0] && rePush.body.rejections[0].why) || ""),
      "rejection reason mentions tombstone");
 
-  // seed a fresh shared fact for the curator test below (p1 was tombstoned)
+  // seed a fresh shared fact, then reject via POST op
   const seed = mkRes();
   await handler(mkReq("POST", "http://x/api/lore", {
     world: "meridian",
@@ -235,6 +235,25 @@ function ok(cond, name) { if (cond) { pass++; console.log("  PASS", name); } els
     }],
   }), seed);
   ok(seed.body && seed.body.merged === 1, "seed fact for curator after tombstone");
+
+  const postReject = mkRes();
+  await handler(mkReq("POST", "http://x/api/lore?world=meridian", {
+    op: "reject", world: "meridian", ids: ["p-curate"],
+  }), postReject);
+  ok(postReject.statusCode === 200 && postReject.body.removed === 1,
+     "POST op:reject removes shared node");
+
+  // re-seed for curator test (p-curate was rejected; avoid tombstoned survival-cache phrasing)
+  const seed2 = mkRes();
+  await handler(mkReq("POST", "http://x/api/lore", {
+    world: "meridian",
+    nodes: [{
+      id: "p-curate-2", source: "play",
+      text: "a hollow mangrove root holds a sealed glass vial of lamp oil",
+      tags: ["generated", "lore"], subject: "mangrove", relation: "holds", object: "a sealed glass vial of lamp oil",
+    }],
+  }), seed2);
+  ok(seed2.body && seed2.body.merged === 1, "second seed fact for curator");
 }
 
 // --- 8. curator script diffs shared vs canonical ---------------------------
@@ -250,7 +269,7 @@ function ok(cond, name) { if (cond) { pass++; console.log("  PASS", name); } els
      "curator wrote OpenSpec change with candidates");
   // the merged player fact should appear as a candidate
   const cand = readFileSync(new URL("candidates.lore_seed.json", changeDir), "utf8");
-  ok(/survival cache/.test(cand), "curator candidate includes the shared fact");
+  ok(/lamp oil/.test(cand), "curator candidate includes the shared fact");
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

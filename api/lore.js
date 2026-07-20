@@ -284,7 +284,8 @@ function similar(a, b) {
 
 export default async function handler(req, res) {
   const url = new URL(req.url, "http://localhost");
-  const path = url.pathname;
+  // Vercel may expose /api/lore or /api/lore.js depending on rewrite vs file route
+  const path = url.pathname.replace(/\.js$/, "");
   const world = url.searchParams.get("world") || "meridian";
   const doc = loadWorld(world);
 
@@ -301,7 +302,19 @@ export default async function handler(req, res) {
     });
   }
 
-  if (req.method === "DELETE" && path === "/api/lore") {
+  // Admin reject: DELETE or POST { op:"reject", ids:[...] } (POST is more proxy-friendly)
+  const isLoreReject =
+    path === "/api/lore" && (
+      req.method === "DELETE" ||
+      (req.method === "POST" && (() => {
+        try {
+          const b = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
+          return b && (b.op === "reject" || b.action === "reject" || b.reject === true);
+        } catch { return false; }
+      })())
+    );
+
+  if (isLoreReject) {
     let body;
     try { body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {}); }
     catch { return res.status(400).json({ ok: false, why: "invalid JSON body" }); }

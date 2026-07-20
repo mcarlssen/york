@@ -352,21 +352,26 @@ async function rejectNode(id){
   sessionAccepted.delete(id);
   renderTable(); renderStats();
   try {
+    // POST op:reject — works even when DELETE is stripped by a proxy / old CDN edge
     const r = await fetch(`${API_BASE}/lore?world=${encodeURIComponent(WORLD)}`, {
-      method: "DELETE",
+      method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ world: WORLD, ids: [id], text: node && node.text }),
+      body: JSON.stringify({ op: "reject", world: WORLD, ids: [id], text: node && node.text }),
     });
     const d = await r.json().catch(() => ({}));
     if (!r.ok) {
-      showToast(d.why || d.note || `delete failed (${r.status})`, "err");
+      sessionRejected.delete(id);
+      renderTable(); renderStats();
+      showToast(d.why || d.note || `reject failed (${r.status})`, "err");
       return;
     }
     allNodes = allNodes.filter(n => n.id !== id);
     renderTable(); renderStats();
     showToast(`Rejected + removed ${id} from shared (tombstoned)`, "err");
   } catch (e) {
-    showToast(e.message || "delete failed", "err");
+    sessionRejected.delete(id);
+    renderTable(); renderStats();
+    showToast(e.message || "reject failed", "err");
   }
 }
 
