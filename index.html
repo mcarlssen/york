@@ -115,12 +115,24 @@ async function callLLMProxy(system, user, maxTokens) {
         body: JSON.stringify({ system, user, maxTokens: maxTokens || 200 })
       });
     } catch (e) {
-      return { content: null, status: "unreachable", code: 0 };
+      return { content: null, status: "unreachable", code: 0, detail: (e && e.message) || "fetch failed" };
     }
-    if (r.status === 429) return { content: null, status: "rate_limit", code: 429 };
-    if (r.status >= 500) return { content: null, status: "server_error", code: r.status };
-    if (!r.ok) return { content: null, status: "server_error", code: r.status };
     const d = await r.json().catch(() => ({}));
+    if (r.status === 429) {
+      return { content: null, status: "rate_limit", code: 429, detail: d.detail, why: d.why, endpointUrl: d.endpointUrl, model: d.model };
+    }
+    if (!r.ok || r.status >= 500) {
+      const status = r.status === 503 && d.why === "no_key" ? "no_key" : "server_error";
+      return {
+        content: null,
+        status,
+        code: (typeof d.code === "number" ? d.code : r.status),
+        detail: d.detail,
+        why: d.why,
+        endpointUrl: d.endpointUrl,
+        model: d.model,
+      };
+    }
     const c = (d && d.content) || null;
     return { content: c, status: c ? "ok" : "empty", code: r.status };
   }
@@ -134,7 +146,11 @@ async function callLLMProxy(system, user, maxTokens) {
       route: "/api/llm",
       status: out.status,
       code: out.code,
-      content: out.content
+      content: out.content,
+      detail: out.detail,
+      why: out.why,
+      endpointUrl: out.endpointUrl,
+      model: out.model,
     });
   }
   return out;
@@ -267,8 +283,16 @@ Priority:
 7. "throw/use X at Y" (attack/aim) → use with item=X target=Y. Assembly "use X to tie" is improvise (rule 3).
 8. "discover" / "explore beyond" / "find a new place" → discover.
 9. Unknown → ask with say=original text (never invent go).`;
-  const { content, status, code } = await callLLMProxy(sys, text, 250);
-  return { parsed: extractJSON(content || ""), status, code };
+  const out = await callLLMProxy(sys, text, 250);
+  return {
+    parsed: extractJSON(out.content || ""),
+    status: out.status,
+    code: out.code,
+    detail: out.detail,
+    why: out.why,
+    endpointUrl: out.endpointUrl,
+    model: out.model,
+  };
 }
 
 let llmUnreachableWarned = false;
@@ -297,7 +321,8 @@ async function playerTurn(text) {
   } else if (status === "rate_limit") {
     toast("Voice rate-limited (429). Offline parse used.", "warn");
   } else if (status === "server_error") {
-    toast("Voice server error (" + (llmResult.code || "?") + "). Offline parse used.", "err");
+    const hint = llmResult.detail || ("code " + (llmResult.code || "?"));
+    toast("Voice upstream error: " + String(hint).slice(0, 120), "err");
   } else if (status === "empty" && !usedLLM) {
     toast("Voice returned empty — using offline parse.", "warn");
   }
@@ -392,9 +417,20 @@ function render() {
   renderJournal();
 }
 
+function formatDebugHttpBody(h) {
+  if (h.content != null) return String(h.content);
+  const parts = [];
+  if (h.why) parts.push("why: " + h.why);
+  if (h.code != null) parts.push("upstream: " + h.code);
+  if (h.detail) parts.push("detail: " + h.detail);
+  if (h.endpointUrl) parts.push("endpoint: " + h.endpointUrl);
+  if (h.model) parts.push("model: " + h.model);
+  return parts.length ? parts.join("\n") : "(null)";
+}
+
 function formatDebugHtml(dbg) {
   const http = (dbg.http || []).map(h => {
-    const body = h.content == null ? "(null)" : String(h.content);
+    const body = formatDebugHttpBody(h);
     return `<div class="dbg-http">HTTP ${escapeHtml(h.route || "/api/llm")} ${escapeHtml(String(h.code))} ${escapeHtml(h.status || "")}<pre>${escapeHtml(body)}</pre></div>`;
   }).join("");
   const ev = (dbg.events || []).map(x => `<div class="dbg-ev">· ${escapeHtml(x)}</div>`).join("");
@@ -405,7 +441,7 @@ function formatDebugText(dbg) {
   const lines = ["--- debug · " + (dbg.at || "") + " ---"];
   for (const h of (dbg.http || [])) {
     lines.push("HTTP " + (h.route || "/api/llm") + " " + h.code + " " + (h.status || ""));
-    lines.push(h.content == null ? "(null)" : String(h.content));
+    lines.push(formatDebugHttpBody(h));
   }
   for (const x of (dbg.events || [])) lines.push("· " + x);
   if (!(dbg.events || []).length) lines.push("· (no engine events)");
