@@ -1,8 +1,8 @@
 /* Styling — colors, typography, borders, visual effects */
 @font-face{
-  font-family:"Geist Pixel Circle";
-  src:url("../fonts/GeistPixel-Circle.woff2") format("woff2");
-  font-weight:100 900;
+  font-family:"Hermit";
+  src:url("../fonts/Hermit-Regular.woff2") format("woff2");
+  font-weight:400;
   font-style:normal;
   font-display:swap;
 }
@@ -12,11 +12,11 @@
 }
 body{
   background:var(--bg); color:var(--ink);
-  font-family:"Geist Pixel Circle","SF Mono",ui-monospace,Menlo,Consolas,monospace;
+  font-family:"Hermit","SF Mono",ui-monospace,Menlo,Consolas,monospace;
   font-size:14px; line-height:1.45;
   background-image:repeating-linear-gradient(0deg,rgba(125,255,176,.035) 0 1px,transparent 1px 3px);
 }
-/* UA stylesheet sets pre/code to monospace and would skip Geist on the map */
+/* UA stylesheet sets pre/code to monospace and would skip the body stack on the map */
 pre,code{font-family:inherit}
 h1{color:var(--fog);font-size:18px;margin:0;letter-spacing:2px;text-shadow:0 0 8px rgba(125,255,176,.4)}
 .sub{color:var(--dim);font-size:12px;margin-top:2px}
