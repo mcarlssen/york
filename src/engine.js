@@ -219,6 +219,21 @@ LoreGraph.prototype.toJSON = function(){ return { nodes:this.nodes, edges:this.e
 LoreGraph.prototype.load = function(obj){
   if(obj&&obj.nodes){ this.nodes=obj.nodes; this.edges=obj.edges||[]; this.seq=obj.seq||0; return true; } return false;
 };
+LoreGraph.prototype.remove = function(id){
+  if(!this.nodes[id]) return false;
+  delete this.nodes[id];
+  this.edges = this.edges.filter(e => e.from !== id && e.to !== id);
+  return true;
+};
+function loreTextSimilar(a, b){
+  const norm = (s) => String(s||"").toLowerCase().replace(/[^a-z0-9 ]/g,"").replace(/\s+/g," ").trim();
+  const na = norm(a), nb = norm(b);
+  if(!na||!nb) return false;
+  if(na===nb) return true;
+  const wa = new Set(na.split(" ")), wb = new Set(nb.split(" "));
+  let ov=0; for(const w of wa) if(wb.has(w)) ov++;
+  return ov/(wa.size+wb.size-ov) > 0.75;
+}
 function persistLore(){ try{ _storage.setItem(LORE_STORE_KEY+":"+WORLD_ID, JSON.stringify(LORE.toJSON())); }catch(e){} }
 function loadLore(){
   try{
@@ -226,6 +241,20 @@ function loadLore(){
     if(raw){ const g=new LoreGraph(); if(g.load(JSON.parse(raw))) return g; }
   }catch(e){}
   return null;
+}
+
+/** Drop play/generated facts that cannot pass shared-tier validation (e.g. >400 chars). */
+function scrubInvalidLocalLore(g){
+  if(!g||!g.nodes) return 0;
+  let n=0;
+  for(const id of Object.keys(g.nodes)){
+    const node = g.nodes[id];
+    if(!node) continue;
+    if(node.source==="spec"||node.source==="shared"||node.source==="canonical") continue;
+    const why = validateFactClient(node.text);
+    if(why){ g.remove(id); n++; }
+  }
+  return n;
 }
 
 function seedLore(g, doc){
@@ -244,7 +273,9 @@ function seedLore(g, doc){
 
 
 function validateFactClient(text){
-  const t = String(text||"").toLowerCase();
+  const s = String(text||"");
+  if(s.length > 400) return "text too long (max 400)";
+  const t = s.toLowerCase();
   // ponytail: equatorial world — block cold/magic only (was wrongly rejecting jungle/tropical)
   if(/volcanic|glacier|polar|tundra|permafrost|ice sheet|magic portal|dragon|unicorn|wizard|fairy/.test(t))
     return "contradicts the world's ecology/identity constraints";
@@ -1045,6 +1076,7 @@ export function createGame(opts = {}) {
         LORE.load(resetOpts.seedLoreGraph);
       }
       seedLore(LORE, WORLD_DOC);
+      if (scrubInvalidLocalLore(LORE)) persistLore();
     }
     S.visited[S.loc] = true;
     pushLog("The Meridian is kindling on the reef. You crawl ashore on the Shingle Beach, the only soul left of her.", "sys");
@@ -1232,6 +1264,7 @@ export function createGame(opts = {}) {
     if (!LORE) return out;
     for (const n of Object.values(LORE.nodes)) {
       if (n.source === "play" || n.source === "generated" || (n.tags && n.tags.includes("generated"))) {
+        if (validateFactClient(n.text)) continue;
         out.push({
           id: n.id, subject: n.subject, relation: n.relation, object: n.object,
           text: n.text, tags: n.tags || [], source: n.source, world: WORLD_ID
@@ -1240,18 +1273,46 @@ export function createGame(opts = {}) {
     }
     return out;
   }
-  function mergeShared(nodes) {
+  function mergeShared(nodes, tombstones) {
     let added = 0;
     for (const n of (nodes || [])) {
       if (LORE.nodes[n.id]) continue;
+      if (isTombedLocal(n, tombstones)) continue;
       LORE.commit(n.subject, n.relation, n.object, {
         id: n.id, source: n.source || "shared",
         tags: (n.tags || []).concat("shared"), turn: n.turn || 0
       });
       added++;
     }
-    if (added) persistLore();
+    const purged = applyTombstones(tombstones);
+    if (added || purged) persistLore();
     return added;
+  }
+  function isTombedLocal(n, tombs) {
+    if (!n || !tombs || !tombs.length) return false;
+    if (tombs.some((t) => t && t.id && t.id === n.id)) return true;
+    if (n.text && tombs.some((t) => t && t.text && loreTextSimilar(t.text, n.text))) return true;
+    return false;
+  }
+  /** Remove local play/generated/shared copies matching admin tombstones. Never remove spec. */
+  function applyTombstones(tombs) {
+    if (!LORE || !tombs || !tombs.length) return 0;
+    let removed = 0;
+    const ids = Object.keys(LORE.nodes);
+    for (const id of ids) {
+      const n = LORE.nodes[id];
+      if (!n || n.source === "spec" || n.source === "canonical") continue;
+      if (isTombedLocal(n, tombs)) {
+        if (LORE.remove(id)) removed++;
+      }
+    }
+    return removed;
+  }
+  function removeLoreNode(id) {
+    if (!LORE || !id) return false;
+    const ok = LORE.remove(id);
+    if (ok) persistLore();
+    return ok;
   }
   function appendLog(t, cls) { pushLog(t, cls); }
   function patchLastLog(cls, patch) {
@@ -1302,6 +1363,7 @@ export function createGame(opts = {}) {
     apiVersion: AGENT_API_VERSION,
     reset, observe, act, genStep,
     isOver, ending, metrics, loreStats, dumpHarvest, exportState,
-    listContributions, mergeShared, appendLog, patchLastLog, parseContext, journalNodes, journalLinks,
+    listContributions, mergeShared, applyTombstones, removeLoreNode,
+    appendLog, patchLastLog, parseContext, journalNodes, journalLinks,
   };
 }

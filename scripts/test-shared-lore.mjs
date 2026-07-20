@@ -6,9 +6,11 @@ import { rmSync, existsSync, readFileSync } from "node:fs";
 
 const CACHE = new URL("../.cache/shared-lore.json", import.meta.url);
 const LLM_CACHE = new URL("../.cache/llm-config.json", import.meta.url);
+const TOMB_CACHE = new URL("../.cache/lore-tombs.json", import.meta.url);
 // start clean so the test is deterministic
 if (existsSync(new URL(CACHE))) rmSync(new URL(CACHE));
 if (existsSync(new URL(LLM_CACHE))) rmSync(new URL(LLM_CACHE));
+if (existsSync(new URL(TOMB_CACHE))) rmSync(new URL(TOMB_CACHE));
 
 const mod = await import("../api/lore.js");
 const handler = mod.default;
@@ -37,6 +39,7 @@ function ok(cond, name) { if (cond) { pass++; console.log("  PASS", name); } els
   const res = mkRes();
   await handler(mkReq("GET", "http://x/api/lore?world=meridian"), res);
   ok(res.statusCode === 200 && res.body.count === 0, "GET empty graph returns 0 nodes");
+  ok(Array.isArray(res.body.tombstones), "GET includes tombstones array");
 }
 
 // --- 2. POST a valid meridian-ecology fact ---------------------------------
@@ -189,6 +192,49 @@ function ok(cond, name) { if (cond) { pass++; console.log("  PASS", name); } els
   if (existsSync(LOCAL_LLM_CONFIG_FILE)) rmSync(LOCAL_LLM_CONFIG_FILE);
   delete process.env.OPENROUTER_API_KEY;
   delete process.env.TOKENROUTER_API_KEY;
+}
+
+// --- 7d. DELETE tombstones shared lore ------------------------------------
+{
+  const del = mkRes();
+  await handler(mkReq("DELETE", "http://x/api/lore?world=meridian", {
+    world: "meridian", ids: ["p1"],
+  }), del);
+  ok(del.statusCode === 200 && del.body.ok === true && del.body.removed === 1,
+     "DELETE removes shared node");
+  ok(del.body.tombstones && del.body.tombstones.some(t => t.id === "p1"),
+     "DELETE records tombstone");
+
+  const getAfter = mkRes();
+  await handler(mkReq("GET", "http://x/api/lore?world=meridian"), getAfter);
+  ok(getAfter.body.count === 0 && getAfter.body.tombstones.some(t => t.id === "p1"),
+     "GET after DELETE has empty graph + tombstone");
+
+  const rePush = mkRes();
+  await handler(mkReq("POST", "http://x/api/lore", {
+    world: "meridian",
+    nodes: [{
+      id: "p1-again", source: "play",
+      text: "the jungle interior hides a fallen survival cache",
+      tags: ["generated"], subject: "jungle", relation: "hides", object: "a survival cache",
+    }],
+  }), rePush);
+  ok(rePush.statusCode === 200 && rePush.body.merged === 0 && rePush.body.rejected === 1,
+     "POST of tombstoned text is rejected");
+  ok(/tombstoned/.test((rePush.body.rejections && rePush.body.rejections[0] && rePush.body.rejections[0].why) || ""),
+     "rejection reason mentions tombstone");
+
+  // seed a fresh shared fact for the curator test below (p1 was tombstoned)
+  const seed = mkRes();
+  await handler(mkReq("POST", "http://x/api/lore", {
+    world: "meridian",
+    nodes: [{
+      id: "p-curate", source: "play",
+      text: "the jungle interior hides a fallen survival cache marked with blue chalk",
+      tags: ["generated", "lore"], subject: "jungle", relation: "hides", object: "a survival cache",
+    }],
+  }), seed);
+  ok(seed.body && seed.body.merged === 1, "seed fact for curator after tombstone");
 }
 
 // --- 8. curator script diffs shared vs canonical ---------------------------
