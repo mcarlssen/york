@@ -150,7 +150,7 @@
   <div class="footer">
     <strong>Workflow:</strong> Nodes from the SHARED tier (source <code>player</code>/<code>shared</code>) that don't exist in the CANONICAL <code>world.json</code> are marked <span class="badge badge-candidate">Candidate</span>. 
     <button class="action-btn accept" onclick="copyAllCandidates()">Copy All Candidate Blocks</button> → paste into <code>openspec/world/world.json</code> <code>lore_seed</code> → PR.
-    <br>Green = accepted this session, Red = rejected, Gray = already in canon. Local-only nodes (generated/play) are not promotable — only shared-tier nodes can enter canon.
+    <br>Green = accepted this session (does <strong>not</strong> write <code>world.json</code>). Red = rejected + deleted from Redis shared lore (tombstoned so clients purge/stop re-push). Gray = already in canon. Local-only nodes (generated/play) are not shown until shared.
   </div>
 </div>
 
@@ -343,14 +343,31 @@ function acceptNode(id){
   sessionAccepted.add(id);
   sessionRejected.delete(id);
   renderTable(); renderStats();
-  showToast(`Accepted ${id}`, "ok");
+  showToast(`Accepted ${id} (session only — does not write world.json)`, "ok");
 }
 
-function rejectNode(id){
+async function rejectNode(id){
+  const node = allNodes.find(n => n.id === id);
   sessionRejected.add(id);
   sessionAccepted.delete(id);
   renderTable(); renderStats();
-  showToast(`Rejected ${id}`, "err");
+  try {
+    const r = await fetch(`${API_BASE}/lore?world=${encodeURIComponent(WORLD)}`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ world: WORLD, ids: [id], text: node && node.text }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      showToast(d.why || d.note || `delete failed (${r.status})`, "err");
+      return;
+    }
+    allNodes = allNodes.filter(n => n.id !== id);
+    renderTable(); renderStats();
+    showToast(`Rejected + removed ${id} from shared (tombstoned)`, "err");
+  } catch (e) {
+    showToast(e.message || "delete failed", "err");
+  }
 }
 
 function copyCandidateBlock(id){

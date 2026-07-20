@@ -87,7 +87,9 @@ function flattenActions(parsed) {
   return [parsed];
 }
 function validateFactClient(text) {
-  const t = String(text || "").toLowerCase();
+  const s = String(text || "");
+  if (s.length > 400) return "text too long (max 400)";
+  const t = s.toLowerCase();
   if (/volcanic|glacier|polar|tundra|permafrost|ice sheet|magic portal|dragon|unicorn|wizard|fairy/.test(t))
     return "contradicts the world's ecology/identity constraints";
   return null;
@@ -185,7 +187,11 @@ async function pushLore() {
   let pushed = 0, skipped = 0;
   const clean = nodes.filter(n => {
     const why = validateFactClient(n.text);
-    if (why) { skipped++; return false; }
+    if (why) {
+      skipped++;
+      if (why.includes("too long") && game.removeLoreNode) game.removeLoreNode(n.id);
+      return false;
+    }
     pushed++;
     return true;
   });
@@ -209,6 +215,12 @@ async function pushLore() {
     dbgEvent("lore: push ok merged=" + merged + " rejected=" + rejected + (skipped ? (" clientSkipped=" + skipped) : ""));
     for (const rej of (d.rejections || []).slice(0, 8)) {
       dbgEvent("lore: rejected " + (rej.id || "?") + " — " + (rej.why || ""));
+      // Drop local copies that the shared tier will never accept / admin tombstoned
+      if (rej.id && game.removeLoreNode && (
+        /too long|tombstoned|admin-rejected/i.test(rej.why || "")
+      )) {
+        game.removeLoreNode(rej.id);
+      }
     }
     // Surface rejections in-chat (not only Debug) so the validator can be tuned.
     if (rejected > 0) {
@@ -234,7 +246,8 @@ async function pullLore() {
     if (!r.ok) return { ok: false, why: "server unavailable (using local + spec seed)" };
     const d = await r.json().catch(() => ({}));
     const shared = (d && d.nodes) || [];
-    const added = game.mergeShared(shared);
+    const tombs = (d && d.tombstones) || [];
+    const added = game.mergeShared(shared, tombs);
     return { ok: true, added };
   } catch (e) {
     return { ok: false, why: "network error (using local + spec seed)" };

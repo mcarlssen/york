@@ -1,9 +1,10 @@
 // York — Shared Lore API (Vercel serverless function)
-// GET  /api/lore?world=meridian       -> { world, nodes:[...], edges:[...], count }
-// POST /api/lore  { world, nodes:[...] } -> { ok, merged, note }
-// POST /api/llm   { system, user, maxTokens } -> { ok, content }  (LLM proxy; key stays server-side)
-// GET  /api/llm-config                -> { config, apiKeyEnvs, store }
-// PUT  /api/llm-config { endpointUrl, apiKeyEnv, model }
+// GET    /api/lore?world=meridian       -> { world, nodes:[...], edges:[...], count, tombstones }
+// POST   /api/lore  { world, nodes:[...] } -> { ok, merged, note }
+// DELETE /api/lore  { world, ids:[...] }   -> remove from shared + tombstone (admin reject)
+// POST   /api/llm   { system, user, maxTokens } -> { ok, content }  (LLM proxy; key stays server-side)
+// GET    /api/llm-config                -> { config, apiKeyEnvs, store }
+// PUT    /api/llm-config { endpointUrl, apiKeyEnv, model }
 //
 // This is the SHARED tier of the three-tier memory architecture
 // (local -> shared -> canonical). It merges player-generated lore that
@@ -185,7 +186,9 @@ async function callChatCompletions(system, user, maxTokens) {
 }
 
 const STORE_KEY = (world) => `york:lore:${world}`;
+const TOMB_KEY = (world) => `york:lore-tomb:${world}`;
 const LOCAL_FILE = join(__dirname, "..", ".cache", "shared-lore.json");
+const LOCAL_TOMB_FILE = join(__dirname, "..", ".cache", "lore-tombs.json");
 
 async function readGraph(world) {
   const r = await getRedis();
@@ -218,6 +221,48 @@ async function writeGraph(graph) {
   return { store: "file" };
 }
 
+function coerceTombs(v) {
+  if (!v) return [];
+  if (typeof v === "string") {
+    try { v = JSON.parse(v); } catch { return []; }
+  }
+  return Array.isArray(v) ? v : [];
+}
+
+async function readTombs(world) {
+  const r = await getRedis();
+  if (r) return coerceTombs(await r.get(TOMB_KEY(world)));
+  if (existsSync(LOCAL_TOMB_FILE)) {
+    try {
+      const all = JSON.parse(readFileSync(LOCAL_TOMB_FILE, "utf8"));
+      return coerceTombs(all[world]);
+    } catch {}
+  }
+  return [];
+}
+
+async function writeTombs(world, tombs) {
+  const r = await getRedis();
+  if (r) { await r.set(TOMB_KEY(world), tombs); return { store: "redis" }; }
+  if (process.env.VERCEL) {
+    const err = new Error("no_durable_store");
+    err.code = "no_durable_store";
+    throw err;
+  }
+  const all = existsSync(LOCAL_TOMB_FILE) ? JSON.parse(readFileSync(LOCAL_TOMB_FILE, "utf8")) : {};
+  all[world] = tombs;
+  mkdirSync(dirname(LOCAL_TOMB_FILE), { recursive: true });
+  writeFileSync(LOCAL_TOMB_FILE, JSON.stringify(all, null, 2));
+  return { store: "file" };
+}
+
+function isTombed(n, tombs) {
+  if (!n || !tombs || !tombs.length) return false;
+  if (tombs.some((t) => t && t.id && t.id === n.id)) return true;
+  if (n.text && tombs.some((t) => t && t.text && similar(t.text, n.text))) return true;
+  return false;
+}
+
 async function storeKind() {
   if (await getRedis()) return "redis";
   if (process.env.VERCEL) return "ephemeral";
@@ -245,12 +290,63 @@ export default async function handler(req, res) {
 
   if (req.method === "GET" && path === "/api/lore") {
     const g = await readGraph(world);
+    const tombs = await readTombs(world);
     const store = await storeKind();
     return res.status(200).json({
       world, nodes: g.nodes, edges: g.edges || [], count: g.nodes.length, store,
+      tombstones: tombs,
       note: store === "ephemeral"
         ? "No durable store configured (set KV_REST_API_URL/_TOKEN or UPSTASH_REDIS_REST_URL/_TOKEN). Writes will not persist on Vercel."
         : undefined,
+    });
+  }
+
+  if (req.method === "DELETE" && path === "/api/lore") {
+    let body;
+    try { body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {}); }
+    catch { return res.status(400).json({ ok: false, why: "invalid JSON body" }); }
+    const ids = Array.isArray(body.ids) ? body.ids.map(String).filter(Boolean)
+      : (body.id ? [String(body.id)] : []);
+    const qid = url.searchParams.get("id");
+    if (qid) ids.push(qid);
+    const uniq = [...new Set(ids)];
+    if (!uniq.length) return res.status(400).json({ ok: false, why: "id(s) required" });
+
+    const g = await readGraph(world);
+    const tombs = await readTombs(world);
+    let removed = 0;
+    const now = new Date().toISOString();
+    const bodyText = typeof body.text === "string" ? body.text : "";
+    for (const id of uniq) {
+      const idx = g.nodes.findIndex((n) => n.id === id);
+      let text = bodyText;
+      if (idx >= 0) {
+        text = g.nodes[idx].text || text;
+        g.nodes.splice(idx, 1);
+        g.edges = (g.edges || []).filter((e) => e.from !== id && e.to !== id);
+        removed++;
+      }
+      const existing = tombs.find((t) => t.id === id);
+      if (existing) {
+        if (text && !existing.text) existing.text = text;
+      } else {
+        tombs.push({ id, text, at: now });
+      }
+    }
+    try {
+      if (removed) await writeGraph(g);
+      await writeTombs(world, tombs);
+    } catch (e) {
+      if (e && e.code === "no_durable_store") {
+        return res.status(503).json({
+          ok: false, why: "no_durable_store",
+          note: "Set KV_REST_API_URL + KV_REST_API_TOKEN (Vercel Upstash) or UPSTASH_REDIS_REST_* — Vercel has no persistent filesystem.",
+        });
+      }
+      throw e;
+    }
+    return res.status(200).json({
+      ok: true, removed, tombstoned: uniq.length, tombstones: tombs, store: await storeKind(),
     });
   }
 
@@ -260,10 +356,16 @@ export default async function handler(req, res) {
     catch { return res.status(400).json({ ok: false, why: "invalid JSON body" }); }
     const incoming = Array.isArray(body && body.nodes) ? body.nodes : [];
     const g = await readGraph(world);
+    const tombs = await readTombs(world);
 
     let merged = 0, rejected = 0;
     const rejections = [];
     for (const n of incoming) {
+      if (isTombed(n, tombs)) {
+        rejected++;
+        rejections.push({ id: n.id, why: "admin-rejected (tombstoned)" });
+        continue;
+      }
       const why = await validateNode(n, doc);
       if (why) { rejected++; rejections.push({ id: n.id, why }); continue; }
       const dup = g.nodes.find(ex => ex.id === n.id || similar(ex.text, n.text));
